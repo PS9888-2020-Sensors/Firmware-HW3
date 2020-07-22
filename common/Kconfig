@@ -1,0 +1,8 @@
+menu "MTFTP Configuration"
+config WIFI_CHANNEL
+    int "WiFi Channel"
+    default 1
+    range 1 11
+    help
+    Wi-Fi Channel to use for communication
+endmenu
