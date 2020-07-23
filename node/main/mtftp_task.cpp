@@ -61,9 +61,6 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 }
 
 static void sendEspNow(const uint8_t *data, uint8_t len) {
-  const char *TAG = "sendEspNow";
-  ESP_LOGD(TAG, "called with len=%d", len);
-
   while (local_state.buffered_tx > MAX_BUFFERED_TX) {
     vTaskDelay(1);
   }
@@ -78,13 +75,11 @@ static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status
 
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   const char *TAG = "onRecvEspNowCb";
-  ESP_LOGD(TAG, "received packet of len %d:", len);
-  ESP_LOG_BUFFER_HEX_LEVEL(TAG, mac_addr, 6, ESP_LOG_DEBUG);
+  ESP_LOGD(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
 
   if (local_state.state == STATE_WAIT_PEER) {
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
-      ESP_LOGI(TAG, "sync packet received from:");
-      ESP_LOG_BUFFER_HEX_LEVEL(TAG, mac_addr, 6, ESP_LOG_INFO);
+      ESP_LOGI(TAG, "sync packet received");
 
       espnow_add_peer(mac_addr);
 
@@ -97,11 +92,12 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
   } else if (local_state.state == STATE_ACTIVE) {
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
       server.onPacketRecv(data, (uint16_t) len);
-    } {
-      ESP_LOGD(TAG, "received packet from non peer:");
-      ESP_LOG_BUFFER_HEX_LEVEL(TAG, mac_addr, 6, ESP_LOG_DEBUG);
+    } else {
+      ESP_LOGD(TAG, "received packet from non peer");
     }
   }
+  
+  ESP_LOGD(TAG, "end");
 }
 
 static void endWindow(void) {
