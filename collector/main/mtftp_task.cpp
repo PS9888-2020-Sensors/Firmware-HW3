@@ -102,6 +102,8 @@ void mtftp_task(void *pvParameter) {
   client.setOnIdleCb(&endWindow);
 
   while(1) {
+    client.loop();
+    
     if (local_state.state == STATE_FIND_PEER) {
       esp_now_send(MAC_BROADCAST, SYNC_PACKET, LEN_SYNC_PACKET);
       vTaskDelay(10000 / portTICK_PERIOD_MS);
