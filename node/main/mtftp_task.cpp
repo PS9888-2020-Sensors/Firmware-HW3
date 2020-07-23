@@ -13,7 +13,7 @@
 
 // len("/sdcard/") + str(file_index) + null
 // 8 + max 5 + 1
-static const uint8_t LEN_MAX_FNAME = 14 + 4;
+static const uint8_t LEN_MAX_FNAME = 14;
 
 // maximum number of packets buffered in esp-now
 // wifi alloc failure observed when > 32 are buffered
@@ -38,7 +38,7 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 
   FILE *fp;
 
-  snprintf(fname, LEN_MAX_FNAME, "%s/%d.txt", SD_MOUNT_POINT, file_index);
+  snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
 
   ESP_LOGI(TAG, "fopen %s", fname);
 
