@@ -1,4 +1,4 @@
-menu "MTFTP Configuration"
+menu "Common Configuration"
 config WIFI_CHANNEL
     int "WiFi Channel"
     default 1
