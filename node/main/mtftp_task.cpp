@@ -42,6 +42,7 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 
   if (local_state.file_index != file_index) {
     if (local_state.file_index != 0) {
+      ESP_LOGI(TAG, "fclose %d", local_state.file_index);
       fclose(local_state.fp);
     }
 
@@ -54,6 +55,8 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
       ESP_LOGE(TAG, "fopen %s failed", fname);
       return false;
     }
+
+    ESP_LOGI(TAG, "fopen %d", file_index);
 
     local_state.file_index = file_index;
   }
@@ -120,7 +123,10 @@ static void endWindow(void) {
   local_state.state = STATE_WAIT_PEER;
 
   if (local_state.file_index != 0) {
+    ESP_LOGI(TAG, "fclose %d", local_state.file_index);
     fclose(local_state.fp);
+
+    local_state.file_index = 0;
   }
 }
 
