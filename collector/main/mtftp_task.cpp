@@ -33,7 +33,6 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
   const char *TAG = "writeFile";
 
   ESP_LOGI(TAG, "file_index=%d file_offset=%d btw=%d", file_index, file_offset, btw);
-  ESP_LOG_BUFFER_HEXDUMP(TAG, data, btw, ESP_LOG_INFO);
 
   return true;
 }

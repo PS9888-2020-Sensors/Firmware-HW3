@@ -40,8 +40,6 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 
   snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
 
-  ESP_LOGI(TAG, "fopen %s", fname);
-
   fp = fopen(fname, "r");
   if (fp == NULL) {
     ESP_LOGE(TAG, "fopen failed: %d", ferror(fp));
