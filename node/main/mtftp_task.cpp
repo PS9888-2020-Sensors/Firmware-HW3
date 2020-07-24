@@ -2,6 +2,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/ringbuf.h"
 #include "esp_vfs_fat.h"
 #include "esp_now.h"
 #include "esp_log.h"
@@ -10,6 +11,8 @@
 
 #include "mtftp_task.h"
 #include "common.h"
+
+#include "sdkconfig.h"
 
 // len("/sdcard/") + str(file_index) + null
 // 8 + max 5 + 1
@@ -33,18 +36,28 @@ struct {
 
   uint16_t file_index;
   FILE *fp;
+  RingbufHandle_t buf_handle;
+  // offset that data in buf_handle starts at in the file
+  uint32_t buf_offset;
 } local_state;
 
 static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, uint16_t btr, uint16_t *br) {
   const char *TAG = "readFile";
 
-  ESP_LOGD(TAG, "readFile of %d at %lu", file_index, (unsigned long) file_offset);
+  ESP_LOGD(TAG, "readFile of %d at offset=%lu btr=%d", file_index, (unsigned long) file_offset, btr);
+
+  size_t br_buf;
+  uint8_t *ptr_buf;
 
   if (local_state.file_index != file_index) {
     if (local_state.file_index != 0) {
       ESP_LOGI(TAG, "fclose %d", local_state.file_index);
       fclose(local_state.fp);
     }
+
+    // clear the ringbuffer by reading everything
+    xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
+    ESP_LOGD(TAG, "purging read buffer (file index mismatch)");
 
     char fname[LEN_MAX_FNAME];
 
@@ -61,14 +74,76 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
     local_state.file_index = file_index;
   }
 
-  if (ftell(local_state.fp) != file_offset) {
-    if (fseek(local_state.fp, file_offset, SEEK_SET) != 0) {
-      ESP_LOGE(TAG, "fseek of %d to %d failed", file_index, file_offset);
-      return false;
+  if (local_state.buf_offset != file_offset) {
+    // clear the ringbuffer by reading everything
+    // if file_offset > buf_offset it might be possible to optimise by
+    // dumping the leading part in the buffer, but we're only likely to go
+    // backwards because of missing data packets anyway
+    xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
+    ESP_LOGD(TAG, "purging read buffer (file offset mismatch)");
+  }
+
+  ptr_buf = (uint8_t *) xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, btr);
+
+  *br = 0;
+
+  if (ptr_buf != NULL) {
+    memcpy(data, ptr_buf, br_buf);
+    vRingbufferReturnItem(local_state.buf_handle, ptr_buf);
+
+    // since we've pulled out br_buf bytes from the rb, buf_offset has also incremented
+    local_state.buf_offset += br_buf;
+
+    *br = br_buf;
+    if (br_buf == btr) {
+      // if full block retrieved, return
+      ESP_LOGD(TAG, "got %d from rb", br_buf);
+      return true;
     }
   }
 
-  *br = fread(data, 1, btr, local_state.fp);
+  // if failed to retrieve anything or less bytes returned than requested,
+  // try to read more data
+
+  uint32_t cur_file_offset = file_offset + (*br);
+
+  if (fseek(local_state.fp, cur_file_offset, SEEK_SET) != 0) {
+    ESP_LOGE(TAG, "fseek of %d to %d failed", file_index, cur_file_offset);
+    return false;
+  }
+
+  uint16_t bytes_read;
+  uint8_t *read_data = (uint8_t *) malloc(CONFIG_READ_BUF_SIZE);
+  if (read_data == NULL) {
+    ESP_LOGE(TAG, "malloc read_data failed");
+    return false;
+  }
+
+  bytes_read = fread(read_data, 1, CONFIG_READ_BUF_SIZE, local_state.fp);
+
+  if (xRingbufferSend(local_state.buf_handle, read_data, bytes_read, 0) == pdFALSE) {
+    ESP_LOGE(TAG, "failed to send to rb");
+    free(read_data);
+    return false;
+  }
+
+  free(read_data);
+
+  local_state.buf_offset = cur_file_offset;
+
+  ptr_buf = (uint8_t *) xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, btr - (*br));
+
+  // if null at this point, should have hit end of file?
+  if (ptr_buf == NULL) {
+    ESP_LOGD(TAG, "got null after loading from SD");
+    return true;
+  }
+
+  memcpy(data + (*br), ptr_buf, br_buf);
+  *br += br_buf;
+
+  vRingbufferReturnItem(local_state.buf_handle, ptr_buf);
+  local_state.buf_offset += br_buf;
 
   return true;
 }
@@ -138,6 +213,8 @@ void mtftp_task(void *pvParameter) {
 
   server.init(&readFile, &sendEspNow);
   server.setOnIdleCb(&endWindow);
+
+  local_state.buf_handle = xRingbufferCreate(CONFIG_READ_BUF_SIZE, RINGBUF_TYPE_BYTEBUF);
 
   while(1) {
     server.loop();
