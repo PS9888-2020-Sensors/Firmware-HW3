@@ -30,32 +30,42 @@ struct {
   uint8_t peer_addr[6];
   int8_t buffered_tx;
   enum state state;
+
+  uint16_t file_index;
+  FILE *fp;
 } local_state;
 
 static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, uint16_t btr, uint16_t *br) {
   const char *TAG = "readFile";
-  char fname[LEN_MAX_FNAME];
 
   ESP_LOGD(TAG, "readFile of %d at %lu", file_index, (unsigned long) file_offset);
 
-  FILE *fp;
+  if (local_state.file_index != file_index) {
+    if (local_state.file_index != 0) {
+      fclose(local_state.fp);
+    }
 
-  snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+    char fname[LEN_MAX_FNAME];
 
-  fp = fopen(fname, "r");
-  if (fp == NULL) {
-    ESP_LOGE(TAG, "fopen %s failed", fname);
-    return false;
+    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+
+    local_state.fp = fopen(fname, "r");
+    if (local_state.fp == NULL) {
+      ESP_LOGE(TAG, "fopen %s failed", fname);
+      return false;
+    }
+
+    local_state.file_index = file_index;
   }
 
-  if (fseek(fp, file_offset, SEEK_SET) != 0) {
-    ESP_LOGE(TAG, "fseek of %s to %d failed", fname, file_offset);
-    return false;
+  if (ftell(local_state.fp) != file_offset) {
+    if (fseek(local_state.fp, file_offset, SEEK_SET) != 0) {
+      ESP_LOGE(TAG, "fseek of %d to %d failed", file_index, file_offset);
+      return false;
+    }
   }
 
-  *br = fread(data, 1, btr, fp);
-
-  fclose(fp);
+  *br = fread(data, 1, btr, local_state.fp);
 
   return true;
 }
@@ -108,6 +118,10 @@ static void endWindow(void) {
 
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_WAIT_PEER;
+
+  if (local_state.file_index != 0) {
+    fclose(local_state.fp);
+  }
 }
 
 void mtftp_task(void *pvParameter) {
