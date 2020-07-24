@@ -22,5 +22,5 @@ void app_main(void) {
 
   sd_init();
 
-  xTaskCreate(mtftp_task, "mtftp_task", 8192, NULL, 4, NULL);
+  xTaskCreatePinnedToCore(mtftp_task, "mtftp_task", 8192, NULL, 4, NULL, 1);
 }

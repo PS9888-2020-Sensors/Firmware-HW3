@@ -36,18 +36,20 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
   const char *TAG = "readFile";
   char fname[LEN_MAX_FNAME];
 
+  ESP_LOGD(TAG, "readFile of %d at %lu", file_index, (unsigned long) file_offset);
+
   FILE *fp;
 
   snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
 
   fp = fopen(fname, "r");
   if (fp == NULL) {
-    ESP_LOGE(TAG, "fopen failed: %d", ferror(fp));
+    ESP_LOGE(TAG, "fopen %s failed", fname);
     return false;
   }
 
   if (fseek(fp, file_offset, SEEK_SET) != 0) {
-    ESP_LOGE(TAG, "fseek failed: %d", ferror(fp));
+    ESP_LOGE(TAG, "fseek of %s to %d failed", fname, file_offset);
     return false;
   }
 
@@ -119,6 +121,8 @@ void mtftp_task(void *pvParameter) {
 
   while(1) {
     server.loop();
-    vTaskDelay(1);
+    if (server.isIdle()) {
+      vTaskDelay(1);
+    }
   }
 }
