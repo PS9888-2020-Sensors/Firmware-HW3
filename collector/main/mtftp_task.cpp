@@ -4,6 +4,7 @@
 #include "esp_vfs_fat.h"
 #include "esp_now.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "mtftp_client.hpp"
 
@@ -25,6 +26,9 @@ struct {
   uint8_t peer_addr[6];
   int8_t buffered_tx;
   enum state state;
+
+  int64_t time_transfer_start;
+  uint32_t bytes_rx;
 } local_state;
 
 const uint8_t MAC_BROADCAST[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -32,7 +36,8 @@ const uint8_t MAC_BROADCAST[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *data, uint16_t btw) {
   const char *TAG = "writeFile";
 
-  ESP_LOGI(TAG, "file_index=%d file_offset=%d btw=%d", file_index, file_offset, btw);
+  ESP_LOGV(TAG, "file_index=%d file_offset=%d btw=%d", file_index, file_offset, btw);
+  local_state.bytes_rx += btw;
 
   return true;
 }
@@ -47,13 +52,15 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
 
   if (local_state.state == STATE_FIND_PEER) {
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
-      ESP_LOGI(TAG, "sync packet received from:");
-      ESP_LOG_BUFFER_HEX_LEVEL(TAG, mac_addr, 6, ESP_LOG_INFO);
+      ESP_LOGI(TAG, "sync packet received");
 
       espnow_add_peer(mac_addr);
       memcpy(local_state.peer_addr, mac_addr, 6);
 
       local_state.state = STATE_ACTIVE;
+
+      local_state.time_transfer_start = esp_timer_get_time();
+      local_state.bytes_rx = 0;
 
       client.beginRead(1, 0);
     } else {
@@ -84,6 +91,8 @@ static void endWindow(void) {
 
   esp_now_del_peer(local_state.peer_addr);
   ESP_LOGI(TAG, "ending window");
+
+  ESP_LOGI(TAG, "took %llu to transfer %d bytes", esp_timer_get_time() - local_state.time_transfer_start, local_state.bytes_rx);
 
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_FIND_PEER;
