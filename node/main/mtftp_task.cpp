@@ -56,8 +56,10 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
     }
 
     // clear the ringbuffer by reading everything
-    xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
-    ESP_LOGD(TAG, "purging read buffer (file index mismatch)");
+    ptr_buf = (uint8_t *) xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
+    if (ptr_buf != NULL) vRingbufferReturnItem(local_state.buf_handle, ptr_buf);
+
+    ESP_LOGI(TAG, "purging read buffer (file index mismatch)");
 
     char fname[LEN_MAX_FNAME];
 
@@ -79,8 +81,10 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
     // if file_offset > buf_offset it might be possible to optimise by
     // dumping the leading part in the buffer, but we're only likely to go
     // backwards because of missing data packets anyway
-    xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
-    ESP_LOGD(TAG, "purging read buffer (file offset mismatch)");
+    ptr_buf = (uint8_t *) xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, CONFIG_READ_BUF_SIZE);
+    if (ptr_buf != NULL) vRingbufferReturnItem(local_state.buf_handle, ptr_buf);
+
+    ESP_LOGI(TAG, "purging read buffer (file offset mismatch)");
   }
 
   ptr_buf = (uint8_t *) xRingbufferReceiveUpTo(local_state.buf_handle, &br_buf, 0, btr);
