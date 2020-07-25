@@ -31,7 +31,7 @@ enum state {
 
 struct {
   uint8_t peer_addr[6];
-  int8_t buffered_tx;
+  volatile int8_t buffered_tx;
   enum state state;
 
   uint16_t file_index;
@@ -153,9 +153,7 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 }
 
 static void sendEspNow(const uint8_t *data, uint8_t len) {
-  while (local_state.buffered_tx > MAX_BUFFERED_TX) {
-    vTaskDelay(1);
-  }
+  while (local_state.buffered_tx > MAX_BUFFERED_TX);
 
   ESP_ERROR_CHECK(esp_now_send((const uint8_t *) local_state.peer_addr, data, len));
   local_state.buffered_tx ++;
