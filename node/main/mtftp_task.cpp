@@ -123,7 +123,7 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
     return false;
   }
 
-  bytes_read = fread(read_data, 1, CONFIG_READ_BUF_SIZE, local_state.fp);
+  bytes_read = fread(read_data, 1, xRingbufferGetCurFreeSize(local_state.buf_handle), local_state.fp);
 
   if (xRingbufferSend(local_state.buf_handle, read_data, bytes_read, 0) == pdFALSE) {
     ESP_LOGE(TAG, "failed to send to rb");
