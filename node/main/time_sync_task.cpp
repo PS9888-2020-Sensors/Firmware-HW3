@@ -41,14 +41,14 @@ void time_sync_task(void *pvParameter) {
   uart_set_baudrate(UART_NUM, 115200);
 
   // disable all messages
-  uart_write_bytes(UART_NUM, "$PUBX,40,GSA,0,0,0,0,0,0*4E\r\n", 31);
-  uart_write_bytes(UART_NUM, "$PUBX,40,VTG,0,0,0,0,0,0*5E\r\n", 31);
-  uart_write_bytes(UART_NUM, "$PUBX,40,RMC,0,0,0,0,0,0*47\r\n", 31);
-  uart_write_bytes(UART_NUM, "$PUBX,40,GSV,0,0,0,0,0,0*59\r\n", 31);
-  uart_write_bytes(UART_NUM, "$PUBX,40,GLL,0,0,0,0,0,0*5C\r\n", 31);
+  uart_write_bytes(UART_NUM, "$PUBX,40,GSA,0,0,0,0,0,0*4E\r\n", 29);
+  uart_write_bytes(UART_NUM, "$PUBX,40,VTG,0,0,0,0,0,0*5E\r\n", 29);
+  uart_write_bytes(UART_NUM, "$PUBX,40,RMC,0,0,0,0,0,0*47\r\n", 29);
+  uart_write_bytes(UART_NUM, "$PUBX,40,GSV,0,0,0,0,0,0*59\r\n", 29);
+  uart_write_bytes(UART_NUM, "$PUBX,40,GLL,0,0,0,0,0,0*5C\r\n", 29);
 
   // enable ZDA (date time)
-  uart_write_bytes(UART_NUM, "$PUBX,40,ZDA,0,1,0,0,0,0*45\r\n", 31);
+  uart_write_bytes(UART_NUM, "$PUBX,40,ZDA,0,1,0,0,0,0*45\r\n", 29);
 
   uart_event_t evt;
   char buf_read[LEN_BUF_READ];
