@@ -2,7 +2,7 @@
 set(COMPONENT_REQUIRES )
 set(COMPONENT_PRIV_REQUIRES )
 
-set(COMPONENT_SRCS "main.cpp" "mtftp_task.cpp")
+set(COMPONENT_SRCS "main.cpp" "mtftp_task.cpp" "time_sync_task.cpp")
 set(COMPONENT_ADD_INCLUDEDIRS "")
 
 register_component()

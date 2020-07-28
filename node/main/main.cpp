@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "mtftp_task.h"
+#include "time_sync_task.h"
 
 #include "sdkconfig.h"
 
