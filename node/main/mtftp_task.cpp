@@ -34,6 +34,7 @@ struct {
   uint8_t peer_addr[6];
   volatile int8_t buffered_tx;
   enum state state;
+  int64_t time_last_packet;
 
   uint16_t file_index;
   FILE *fp;
@@ -217,10 +218,14 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       sendEspNow(data, len);
 
       local_state.state = STATE_ACTIVE;
+
+      local_state.time_last_packet = esp_timer_get_time();
     }
   } else if (local_state.state == STATE_ACTIVE) {
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
       server.onPacketRecv(data, (uint16_t) len);
+
+      local_state.time_last_packet = esp_timer_get_time();
     } else {
       ESP_LOGD(TAG, "received packet from non peer");
     }
@@ -254,11 +259,16 @@ void mtftp_task(void *pvParameter) {
   esp_now_register_recv_cb(onRecvEspNowCb);
 
   server.init(&readFile, &sendEspNow);
-  server.setOnIdleCb(&endWindow);
+  server.setOnTimeoutCb(&endWindow);
 
   while(1) {
     server.loop();
     if (server.isIdle()) {
+      if (local_state.state == STATE_ACTIVE && (esp_timer_get_time() - local_state.time_last_packet) > CONFIG_TIMEOUT) {
+        ESP_LOGI(TAG, "timeout in idle");
+        endWindow();
+      }
+
       vTaskDelay(1);
     }
   }
