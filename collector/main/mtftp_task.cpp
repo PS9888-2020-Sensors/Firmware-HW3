@@ -16,6 +16,9 @@
 // wifi alloc failure observed when > 32 are buffered
 static const uint8_t MAX_BUFFERED_TX = 8;
 
+// interval in microseconds
+static const uint32_t REPORT_INTERVAL = 1000000;
+
 static MtftpClient client;
 
 enum state {
@@ -30,7 +33,7 @@ struct {
   int8_t buffered_tx;
   enum state state;
 
-  int64_t time_transfer_start;
+  int64_t last_report;
   uint32_t bytes_rx;
 
   RingbufHandle_t file_entries;
@@ -121,8 +124,6 @@ static void endWindow(void) {
   esp_now_del_peer(local_state.peer_addr);
   ESP_LOGI(TAG, "ending window");
 
-  ESP_LOGI(TAG, "took %llu to transfer %d bytes", esp_timer_get_time() - local_state.time_transfer_start, local_state.bytes_rx);
-
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_FIND_PEER;
 }
@@ -132,8 +133,18 @@ static void transferEnd(void) {
 }
 
 static void client_loop_task(void *pvParameter) {
+  const char *TAG = "transfer";
+
   while(1) {
     client.loop();
+
+    int64_t time_diff = esp_timer_get_time() - local_state.last_report;
+    if (local_state.bytes_rx > 0 && time_diff > REPORT_INTERVAL) {
+      ESP_LOGI(TAG, "%d bytes at %.2f kbyte/s", local_state.bytes_rx, (double) local_state.bytes_rx / 1024 / (time_diff / 1000000));
+      
+      local_state.last_report = esp_timer_get_time();
+      local_state.bytes_rx = 0;
+    }
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
