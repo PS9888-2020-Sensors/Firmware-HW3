@@ -209,7 +209,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
 
   if (local_state.state == STATE_WAIT_PEER) {
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
-      ESP_LOGI(TAG, "sync packet received");
+      ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
 
       espnow_add_peer(mac_addr);
 
@@ -225,7 +225,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
       server.onPacketRecv(data, (uint16_t) len);
 
-      local_state.time_last_packet = esp_timer_get_time();
+      if (!server.isIdle()) local_state.time_last_packet = esp_timer_get_time();
     } else {
       ESP_LOGD(TAG, "received packet from non peer");
     }

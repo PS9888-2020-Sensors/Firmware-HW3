@@ -52,7 +52,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
 
   if (local_state.state == STATE_FIND_PEER) {
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
-      ESP_LOGI(TAG, "sync packet received");
+      ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
 
       espnow_add_peer(mac_addr);
       memcpy(local_state.peer_addr, mac_addr, 6);
