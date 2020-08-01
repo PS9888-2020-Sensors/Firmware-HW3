@@ -1,2 +1,8 @@
 menu "Project Configuration"
+  config LEN_FILE_LIST
+    int "File List Length"
+    default 8
+    range 1 16
+    help
+    Maximum number of files to transfer in one window
 endmenu
