@@ -4,5 +4,16 @@ config WIFI_CHANNEL
     default 1
     range 1 11
     help
-    Wi-Fi Channel to use for communication
+        Wi-Fi Channel to use for communication
+config SIMULATE_PACKET_LOSS
+    bool "Randomly drop outgoing packets"
+    help
+        Simulate packet loss by randomly dropping outgoing packets
+config PACKET_LOSS_MOD
+    int "Packet Loss Modulus"
+    depends on SIMULATE_PACKET_LOSS
+    default 10
+    range 2 100
+    help
+        Packet is dropped if (rand % ???) == 0
 endmenu

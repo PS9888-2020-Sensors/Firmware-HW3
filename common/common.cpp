@@ -50,6 +50,10 @@ void setEspNowTxAddr(uint8_t *addr) {
 }
 
 void sendEspNow(const uint8_t *data, uint8_t len) {
+  #ifdef CONFIG_SIMULATE_PACKET_LOSS
+    if (esp_random() % CONFIG_PACKET_LOSS_MOD == 0) return;
+  #endif
+
   while (buffered_tx > MAX_BUFFERED_TX);
 
   ESP_ERROR_CHECK(esp_now_send((const uint8_t *) espnow_tx_addr, data, len));
@@ -63,6 +67,11 @@ static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status
 void espnow_init(void) {
   ESP_ERROR_CHECK(esp_now_init());
   ESP_ERROR_CHECK(esp_now_register_send_cb(onSendEspNowCb));
+
+  #ifdef CONFIG_SIMULATE_PACKET_LOSS
+    const char *TAG = "espnow_init";
+    ESP_LOGW(TAG, "will randomly drop outgoing packets because SIMULATE_PACKET_LOSS is set");
+  #endif
 }
 
 void sd_init(void) {

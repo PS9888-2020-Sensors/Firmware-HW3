@@ -1,4 +1,4 @@
-menu "Project Configuration"
+menu "Node Configuration"
 config READ_BUF_SIZE
     int "Read Buffer Size"
     default 8192
