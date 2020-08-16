@@ -19,10 +19,6 @@
 // 8 + max 5 + 1
 static const uint8_t LEN_MAX_FNAME = 14;
 
-// maximum number of packets buffered in esp-now
-// wifi alloc failure observed when > 32 are buffered
-static const uint8_t MAX_BUFFERED_TX = 8;
-
 static MtftpServer server;
 
 enum state {
@@ -32,7 +28,6 @@ enum state {
 
 struct {
   uint8_t peer_addr[6];
-  volatile int8_t buffered_tx;
   enum state state;
   int64_t time_last_packet;
 
@@ -192,17 +187,6 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
   return true;
 }
 
-static void sendEspNow(const uint8_t *data, uint8_t len) {
-  while (local_state.buffered_tx > MAX_BUFFERED_TX);
-
-  ESP_ERROR_CHECK(esp_now_send((const uint8_t *) local_state.peer_addr, data, len));
-  local_state.buffered_tx ++;
-}
-
-static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  local_state.buffered_tx --;
-}
-
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   const char *TAG = "onRecvEspNowCb";
   ESP_LOGD(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
@@ -255,7 +239,7 @@ void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
   memset(&local_state, 0, sizeof(local_state));
 
-  esp_now_register_send_cb(onSendEspNowCb);
+  setEspNowTxAddr(local_state.peer_addr);
   esp_now_register_recv_cb(onRecvEspNowCb);
 
   server.init(&readFile, &sendEspNow);

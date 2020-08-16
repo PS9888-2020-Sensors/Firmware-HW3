@@ -42,19 +42,27 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(ESP_IF_WIFI_STA, true, DATA_RATE));
 }
 
+int8_t buffered_tx = 0;
+uint8_t *espnow_tx_addr = NULL;
+
+void setEspNowTxAddr(uint8_t *addr) {
+  espnow_tx_addr = addr;
+}
+
+void sendEspNow(const uint8_t *data, uint8_t len) {
+  while (buffered_tx > MAX_BUFFERED_TX);
+
+  ESP_ERROR_CHECK(esp_now_send((const uint8_t *) espnow_tx_addr, data, len));
+  buffered_tx ++;
+}
+
+static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  buffered_tx --;
+}
 
 void espnow_init(void) {
   ESP_ERROR_CHECK(esp_now_init());
-  // ESP_ERROR_CHECK(esp_now_register_send_cb(espnow_send_cb));
-  // ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
-
-  esp_now_peer_info_t peer;
-  memset(&peer, 0, sizeof(esp_now_peer_info_t));
-  peer.channel = CONFIG_WIFI_CHANNEL;
-  peer.ifidx = ESP_IF_WIFI_STA;
-  peer.encrypt = false;
-
-  ESP_ERROR_CHECK(esp_now_add_peer(&peer));
+  ESP_ERROR_CHECK(esp_now_register_send_cb(onSendEspNowCb));
 }
 
 void sd_init(void) {
