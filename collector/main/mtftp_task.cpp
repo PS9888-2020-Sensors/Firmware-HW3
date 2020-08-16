@@ -84,7 +84,7 @@ static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status
 
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   const char *TAG = "onRecvEspNowCb";
-  ESP_LOGD(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
+  ESP_LOGV(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
 
   if (local_state.state == STATE_FIND_PEER) {
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
@@ -106,7 +106,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
     }
   }
 
-  ESP_LOGD(TAG, "end");
+  ESP_LOGV(TAG, "end");
 }
 
 static void sendEspNow(const uint8_t *data, uint8_t len) {
