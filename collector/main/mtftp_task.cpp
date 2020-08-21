@@ -100,11 +100,11 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
   ESP_LOGV(TAG, "end");
 }
 
-static void endWindow(void) {
-  const char *TAG = "endWindow";
+static void endPeered(void) {
+  const char *TAG = "endPeered";
 
   esp_now_del_peer(local_state.peer_addr);
-  ESP_LOGI(TAG, "ending window");
+  ESP_LOGI(TAG, "ending peered communication");
 
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_FIND_PEER;
@@ -144,7 +144,7 @@ void mtftp_task(void *pvParameter) {
   espnow_add_peer(MAC_BROADCAST);
 
   client.init(&writeFile, &sendEspNow);
-  client.setOnTimeoutCb(&endWindow);
+  client.setOnTimeoutCb(&endPeered);
   client.setOnTransferEndCb(&transferEnd);
 
   xTaskCreate(client_loop_task, "client_loop_task", 2048, NULL, 5, NULL);
@@ -163,7 +163,7 @@ void mtftp_task(void *pvParameter) {
         local_state.state = STATE_ACTIVE;
       } else {
         ESP_LOGI(TAG, "no more files queued");
-        endWindow();
+        endPeered();
         while(1) vTaskDelay(1000);
       }
     }

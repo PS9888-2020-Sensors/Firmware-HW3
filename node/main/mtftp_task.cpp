@@ -218,11 +218,11 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
   ESP_LOGD(TAG, "end");
 }
 
-static void endWindow(void) {
-  const char *TAG = "endWindow";
+static void endPeered(void) {
+  const char *TAG = "endPeered";
 
   esp_now_del_peer(local_state.peer_addr);
-  ESP_LOGI(TAG, "ending window");
+  ESP_LOGI(TAG, "ending peered communication");
 
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_WAIT_PEER;
@@ -243,14 +243,14 @@ void mtftp_task(void *pvParameter) {
   esp_now_register_recv_cb(onRecvEspNowCb);
 
   server.init(&readFile, &sendEspNow);
-  server.setOnTimeoutCb(&endWindow);
+  server.setOnTimeoutCb(&endPeered);
 
   while(1) {
     server.loop();
     if (server.isIdle()) {
       if (local_state.state == STATE_ACTIVE && (esp_timer_get_time() - local_state.time_last_packet) > CONFIG_TIMEOUT) {
         ESP_LOGI(TAG, "timeout in idle");
-        endWindow();
+        endPeered();
       }
 
       vTaskDelay(1);
