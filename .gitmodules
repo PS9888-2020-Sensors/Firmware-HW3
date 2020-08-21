@@ -1,0 +1,6 @@
+[submodule "collector/components/mtftp"]
+	path = collector/components/mtftp
+	url = https://github.com/PS9888-2020-Sensors/mtftp.git
+[submodule "node/components/mtftp"]
+	path = node/components/mtftp
+	url = https://github.com/PS9888-2020-Sensors/mtftp.git
