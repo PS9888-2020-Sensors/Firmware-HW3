@@ -9,3 +9,5 @@ const gpio_num_t GPIO_SPI_MISO = GPIO_NUM_26;
 const gpio_num_t GPIO_SPI_MOSI = GPIO_NUM_25;
 const gpio_num_t GPIO_SPI_CS_ADC = GPIO_NUM_23;
 const gpio_num_t GPIO_SPI_CS_BME = GPIO_NUM_22;
+
+const gpio_num_t GPIO_POWER_SEL = GPIO_NUM_18;

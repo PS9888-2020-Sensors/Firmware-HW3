@@ -6,10 +6,13 @@
 #include "esp_wifi.h"
 #include "esp_private/wifi.h"
 #include "esp_now.h"
+#include "driver/gpio.h"
 
 #include "esp_vfs_fat.h"
 #include "driver/sdmmc_host.h"
 #include "sdmmc_cmd.h"
+
+#include "board.h"
 
 const char *SD_MOUNT_POINT = "/sdcard";
 const uint8_t SYNC_PACKET[LEN_SYNC_PACKET] = { 0x00, 0xf5, 0x3a, 0x72, 0x89, 0x13, 0x57, 0xa5 };
@@ -83,6 +86,11 @@ void sd_init(void) {
     .allocation_unit_size = 16 * 1024
   };
 
+  gpio_set_direction(GPIO_POWER_SEL, GPIO_MODE_OUTPUT);
+  sd_activate();
+
+  vTaskDelay(500 / portTICK_RATE_MS);
+
   sdmmc_card_t* card;
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
   sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
@@ -114,4 +122,12 @@ esp_err_t espnow_add_peer(const uint8_t *peer_addr) {
   peer.encrypt = false;
   memcpy(peer.peer_addr, peer_addr, 6);
   return esp_now_add_peer(&peer);
+}
+
+void sd_activate(void) {
+  gpio_set_level(GPIO_POWER_SEL, 0);
+}
+
+void sd_deactivate(void) {
+  gpio_set_level(GPIO_POWER_SEL, 1);
 }
