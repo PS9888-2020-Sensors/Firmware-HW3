@@ -15,10 +15,6 @@
 
 #include "sdkconfig.h"
 
-// len("/sdcard/") + str(file_index) + null
-// 8 + max 5 + 1
-static const uint8_t LEN_MAX_FNAME = 14;
-
 static MtftpServer server;
 
 enum state {

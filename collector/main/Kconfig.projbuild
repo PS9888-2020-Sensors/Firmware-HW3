@@ -1,8 +1,14 @@
-menu "Project Configuration"
+menu "Collector Configuration"
   config LEN_FILE_LIST
     int "File List Length"
     default 8
     range 1 16
     help
     Maximum number of files to transfer in one window
+  config WRITE_FILE_BUF_SIZE
+    int "File Write Buffer Size"
+    default 8192
+    range 1024 16384
+    help
+    File write buffer size
 endmenu
