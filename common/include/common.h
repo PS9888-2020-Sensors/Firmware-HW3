@@ -37,4 +37,8 @@ typedef struct __attribute__((__packed__)) {
   uint32_t size;
 } file_list_entry_t;
 
+// len("/sdcard/") + str(file_index) + null
+// 8 + max 5 + 1
+static const uint8_t LEN_MAX_FNAME = 14;
+
 #endif

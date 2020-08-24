@@ -20,7 +20,7 @@ void app_main(void) {
   wifi_init();
   espnow_init();
 
-  // sd_init();
+  sd_init();
 
-  xTaskCreate(mtftp_task, "mtftp_task", 2048, NULL, 4, NULL);
+  xTaskCreatePinnedToCore(mtftp_task, "mtftp_task", 2048, NULL, 4, NULL, 1);
 }
