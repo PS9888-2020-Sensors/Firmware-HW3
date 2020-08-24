@@ -165,7 +165,7 @@ static void client_loop_task(void *pvParameter) {
     int64_t time_diff = esp_timer_get_time() - local_state.last_report;
     if (local_state.bytes_rx > 0 && time_diff > REPORT_INTERVAL) {
       ESP_LOGI(TAG, "%d bytes at %.2f kbyte/s", local_state.bytes_rx, (double) local_state.bytes_rx / 1024 / (time_diff / 1000000));
-      
+
       local_state.last_report = esp_timer_get_time();
       local_state.bytes_rx = 0;
     }
@@ -311,7 +311,9 @@ void mtftp_task(void *pvParameter) {
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {
       esp_now_send(MAC_BROADCAST, SYNC_PACKET, LEN_SYNC_PACKET);
+
       ESP_LOGD(TAG, "broadcasting sync");
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     } else if (local_state.state == STATE_WAIT_WRITES) {
       UBaseType_t items_waiting;
       vRingbufferGetInfo(local_state.write_buffer, NULL, NULL, NULL, NULL, &items_waiting);
@@ -334,8 +336,8 @@ void mtftp_task(void *pvParameter) {
         endPeered();
         while(1) vTaskDelay(1000);
       }
+    } else {
+      vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
