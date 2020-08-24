@@ -306,7 +306,7 @@ void mtftp_task(void *pvParameter) {
   client.setOnTransferEndCb(&transferEnd);
 
   xTaskCreate(client_loop_task, "client_loop_task", 2048, NULL, 5, NULL);
-  xTaskCreate(write_file_task, "write_file_task", 2048, NULL, 5, NULL);
+  xTaskCreate(write_file_task, "write_file_task", 2048, NULL, 6, NULL);
 
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {
