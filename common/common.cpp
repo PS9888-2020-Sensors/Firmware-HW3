@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 #include "nvs_flash.h"
 #include "esp_wifi.h"
 #include "esp_private/wifi.h"
@@ -45,7 +48,7 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(ESP_IF_WIFI_STA, true, DATA_RATE));
 }
 
-int8_t buffered_tx = 0;
+SemaphoreHandle_t can_tx;
 uint8_t *espnow_tx_addr = NULL;
 
 void setEspNowTxAddr(uint8_t *addr) {
@@ -57,19 +60,22 @@ void sendEspNow(const uint8_t *data, uint8_t len) {
     if (esp_random() % CONFIG_PACKET_LOSS_MOD == 0) return;
   #endif
 
-  while (buffered_tx > MAX_BUFFERED_TX);
-
+  while (xSemaphoreTake(can_tx, 50 / portTICK_PERIOD_MS) != pdTRUE) {
+    ESP_LOGI("wait", "waiting");
+  }
   ESP_ERROR_CHECK(esp_now_send((const uint8_t *) espnow_tx_addr, data, len));
-  buffered_tx ++;
 }
 
 static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  buffered_tx --;
+  xSemaphoreGive(can_tx);
 }
 
 void espnow_init(void) {
   ESP_ERROR_CHECK(esp_now_init());
   ESP_ERROR_CHECK(esp_now_register_send_cb(onSendEspNowCb));
+
+  can_tx = xSemaphoreCreateCounting(MAX_BUFFERED_TX, MAX_BUFFERED_TX);
+  assert(can_tx != NULL);
 
   #ifdef CONFIG_SIMULATE_PACKET_LOSS
     const char *TAG = "espnow_init";
