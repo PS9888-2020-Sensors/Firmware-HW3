@@ -20,7 +20,6 @@ static MtftpClient client;
 enum state {
   STATE_FIND_PEER,    // finding peer to communicate with
   STATE_LOAD_LIST,    // reading file index 0 from server
-  STATE_WAIT_WRITES,  // wait for all current writes to finish
   STATE_START_READ,   // start reading next file
   STATE_ACTIVE        // transfer in progress
 };
@@ -33,12 +32,8 @@ struct {
   uint32_t bytes_rx;
 
   uint16_t file_index;
-  uint16_t target_file_index;
   FILE *fp;
 
-  // buffers data to be written to file
-  // stores data of format write_buffer_header_t
-  RingbufHandle_t write_buffer;
   // stores list of file_list_entry_t
   // TODO: why isn't this a queue?
   RingbufHandle_t file_entries;
@@ -84,22 +79,42 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     return true;
   }
 
-  if (local_state.file_index != 0 && file_index != local_state.file_index) {
-    ESP_LOGE(TAG, "target file_index of %d differs from current open %d", file_index, local_state.file_index);
+  if (local_state.file_index != file_index) {
+    if (local_state.file_index != 0) {
+      ESP_LOGI(TAG, "fclose %d", local_state.file_index);
+      fclose(local_state.fp);
+    }
+
+    char fname[LEN_MAX_FNAME];
+
+    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+
+    local_state.fp = fopen(fname, "a");
+    if (local_state.fp == NULL) {
+      ESP_LOGE(TAG, "fopen %s failed", fname);
+      return false;
+    }
+
+    if (setvbuf(local_state.fp, NULL, _IOFBF, CONFIG_WRITE_BUF_SIZE) != 0) {
+      ESP_LOGE(TAG, "setvbuf failed");
+      return false;
+    }
+
+    ESP_LOGI(TAG, "fopen %d", file_index);
+
+    local_state.file_index = file_index;
+  }
+
+  if (fseek(local_state.fp, file_offset, SEEK_SET) != 0) {
+    ESP_LOGE(TAG, "fseek of %d to %d failed", file_index, file_offset);
     return false;
   }
 
-  local_state.target_file_index = file_index;
-
-  if (xRingbufferSend(local_state.write_buffer, &file_offset, sizeof(uint32_t), 0) != pdTRUE) {
-    ESP_LOGW(TAG, "failed to send offset to ringbuffer");
+  size_t bw = fwrite(data, 1, btw, local_state.fp);
+  if (bw != btw) {
+    ESP_LOGE(TAG, "write failed, only %d bytes written (!= %d)", bw, btw);
     return false;
-  };
-
-  if (xRingbufferSend(local_state.write_buffer, data, btw, 0) != pdTRUE) {
-    ESP_LOGW(TAG, "failed to send data to ringbuffer");
-    return false;
-  };
+  }
 
   return true;
 }
@@ -116,7 +131,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       memcpy(local_state.peer_addr, mac_addr, 6);
 
       local_state.state = STATE_LOAD_LIST;
-      client.beginRead(0, 0);
+      client.beginRead(0, 0, CONFIG_WINDOW_SIZE);
     } else {
       ESP_LOGW(TAG, "received non sync packet");
     }
@@ -153,15 +168,13 @@ static void endPeered(void) {
 }
 
 static void transferEnd(void) {
-  local_state.state = STATE_WAIT_WRITES;
+  local_state.state = STATE_START_READ;
 }
 
-static void client_loop_task(void *pvParameter) {
+static void rate_logging_task(void *pvParameter) {
   const char *TAG = "transfer";
 
   while(1) {
-    client.loop();
-
     int64_t time_diff = esp_timer_get_time() - local_state.last_report;
     if (local_state.bytes_rx > 0 && time_diff > REPORT_INTERVAL) {
       ESP_LOGI(TAG, "%d bytes at %.2f kbyte/s", local_state.bytes_rx, (double) local_state.bytes_rx / 1024 / (time_diff / 1000000));
@@ -174,113 +187,9 @@ static void client_loop_task(void *pvParameter) {
   }
 }
 
-static void write_file_task(void *pvParameter) {
-  const char *TAG = "write_file_task";
-
+static void client_loop_task(void *pvParameter) {
   while(1) {
-    char file_offset[4];
-    size_t size1 = 0, size2 = 0;
-    char *item1, *item2;
-
-    if (xRingbufferReceiveSplit(
-      local_state.write_buffer,
-      (void **) &item1,
-      (void **) &item2,
-      &size1,
-      &size2,
-      100 / portTICK_PERIOD_MS
-    ) != pdTRUE) {
-      continue;
-    }
-
-    if (item1 == NULL) continue;
-
-    // this item should be 4 bytes (file offset)
-    // combine item1 and item2 if necessary
-
-    if ((size1 + size2) != 4) {
-      ESP_LOGW(TAG, "expected 4 byte file_offset but got %d bytes", size1 + size2);
-      continue;
-    }
-
-    memcpy(file_offset, item1, size1);
-    vRingbufferReturnItem(local_state.write_buffer, (void *) item1);
-    if (size1 < 4) {
-      if (item2 == NULL) {
-        ESP_LOGW(TAG, "could not retrieve full file_offset");
-        continue;
-      }
-      memcpy(file_offset + size1, item2, size2);
-      vRingbufferReturnItem(local_state.write_buffer, (void *) item2);
-    }
-
-    // open the correct file pointer if not already open
-    if (local_state.file_index != local_state.target_file_index) {
-      if (local_state.file_index != 0) {
-        ESP_LOGI(TAG, "fclose %d", local_state.file_index);
-        fclose(local_state.fp);
-      }
-
-      char fname[LEN_MAX_FNAME];
-
-      snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, local_state.target_file_index);
-
-      local_state.fp = fopen(fname, "a");
-      if (local_state.fp == NULL) {
-        ESP_LOGE(TAG, "fopen %s failed", fname);
-        abort();
-      }
-
-      if (setvbuf(local_state.fp, NULL, _IOFBF, CONFIG_WRITE_BUF_SIZE) != 0) {
-        ESP_LOGE(TAG, "setvbuf failed");
-        abort();
-      }
-
-      ESP_LOGI(TAG, "fopen %d", local_state.target_file_index);
-
-      local_state.file_index = local_state.target_file_index;
-    }
-
-    if (fseek(local_state.fp, *((uint32_t *) file_offset), SEEK_SET) != 0) {
-      ESP_LOGE(TAG, "fseek of %d to %d failed", local_state.target_file_index, *((uint32_t *) file_offset));
-      abort();
-    }
-
-    // retrieve actual file data
-    if (xRingbufferReceiveSplit(
-      local_state.write_buffer,
-      (void **) &item1,
-      (void **) &item2,
-      &size1,
-      &size2,
-      1
-    ) != pdTRUE) {
-      ESP_LOGW(TAG, "data not available!");
-      continue;
-    }
-
-    if (item1 == NULL) {
-      ESP_LOGW(TAG, "data not available!");
-      continue;
-    }
-
-    size_t bw = fwrite(item1, 1, size1, local_state.fp);
-    vRingbufferReturnItem(local_state.write_buffer, (void *) item1);
-    if (bw != size1) {
-      ESP_LOGE(TAG, "write failed, only %d bytes written (!= %d)", bw, size1);
-    }
-
-    ESP_LOGD(TAG, "wrote %d bytes at %d", bw, *((uint32_t *) file_offset));
-
-    if (item2 == NULL) continue;
-
-    bw = fwrite(item2, 1, size2, local_state.fp);
-    vRingbufferReturnItem(local_state.write_buffer, (void *) item2);
-    if (bw != size2) {
-      ESP_LOGE(TAG, "write failed, only %d bytes written (!= %d)", bw, size2);
-    }
-
-    ESP_LOGD(TAG, "wrote %d bytes", bw);
+    client.loop();
   }
 }
 
@@ -288,12 +197,8 @@ void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
 
   memset(&local_state, 0, sizeof(local_state));
-  // allocate enough space to hold the entire buffer and file_offset
-  // each item also requires 8 bytes for a header, so allocate space for that too
-  local_state.write_buffer = xRingbufferCreate((CONFIG_LEN_MTFTP_BUFFER * CONFIG_LEN_BLOCK) + sizeof(uint32_t) + (8 * 2), RINGBUF_TYPE_ALLOWSPLIT);
   local_state.file_entries = xRingbufferCreate(CONFIG_LEN_FILE_LIST * sizeof(file_list_entry_t), RINGBUF_TYPE_BYTEBUF);
 
-  assert(local_state.write_buffer != NULL);
   assert(local_state.file_entries != NULL);
 
   setEspNowTxAddr(local_state.peer_addr);
@@ -306,7 +211,7 @@ void mtftp_task(void *pvParameter) {
   client.setOnTransferEndCb(&transferEnd);
 
   xTaskCreate(client_loop_task, "client_loop_task", 2048, NULL, 5, NULL);
-  xTaskCreate(write_file_task, "write_file_task", 2048, NULL, 6, NULL);
+  xTaskCreate(rate_logging_task, "rate_logging_task", 2048, NULL, 3, NULL);
 
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {
@@ -314,27 +219,19 @@ void mtftp_task(void *pvParameter) {
 
       ESP_LOGD(TAG, "broadcasting sync");
       vTaskDelay(100 / portTICK_PERIOD_MS);
-    } else if (local_state.state == STATE_WAIT_WRITES) {
-      UBaseType_t items_waiting;
-      vRingbufferGetInfo(local_state.write_buffer, NULL, NULL, NULL, NULL, &items_waiting);
-
-      if (items_waiting == 0) {
-        close_fp();
-        local_state.state = STATE_START_READ;
-      }
     } else if (local_state.state == STATE_START_READ) {
       // if files are available in file_entries, start reading the next one
       size_t read;
       file_list_entry_t *entry = (file_list_entry_t *) xRingbufferReceiveUpTo(local_state.file_entries, &read, 0, sizeof(file_list_entry_t));
 
       if (entry != NULL) {
-        client.beginRead(entry->index, 0);
+        client.beginRead(entry->index, 0, CONFIG_WINDOW_SIZE);
         vRingbufferReturnItem(local_state.file_entries, (void *) entry);
         local_state.state = STATE_ACTIVE;
       } else {
         ESP_LOGI(TAG, "no more files queued");
         endPeered();
-        while(1) vTaskDelay(1000);
+        while(1) vTaskDelay(10000);
       }
     } else {
       vTaskDelay(100 / portTICK_PERIOD_MS);
