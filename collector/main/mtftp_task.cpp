@@ -1,7 +1,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/ringbuf.h"
+#include "freertos/queue.h"
 #include "esp_vfs_fat.h"
 #include "esp_now.h"
 #include "esp_log.h"
@@ -35,8 +35,7 @@ struct {
   FILE *fp;
 
   // stores list of file_list_entry_t
-  // TODO: why isn't this a queue?
-  RingbufHandle_t file_entries;
+  QueueHandle_t file_entries;
 } local_state;
 
 const uint8_t MAC_BROADCAST[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -54,26 +53,33 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
 
     // clear the ringbuffer
     if (file_offset == 0) {
-      size_t read;
-      char *item = (char *) xRingbufferReceiveUpTo(local_state.file_entries, &read, 0, CONFIG_LEN_FILE_LIST * sizeof(file_list_entry_t));
-      if (item != NULL) vRingbufferReturnItem(local_state.file_entries, (void *) item);
+      xQueueReset(local_state.file_entries);
+    } else {
+      ESP_LOGW(TAG, "handling of file_index=0 at offset %d is likely broken!", file_offset);
     }
 
-    size_t free_size = xRingbufferGetCurFreeSize(local_state.file_entries);
+    file_list_entry_t *entry;
+    for (uint16_t i = 0; (i + 1) * sizeof(file_list_entry_t) < btw; i++) {
+      entry = (file_list_entry_t *) (data + (i * sizeof(file_list_entry_t)));
 
-    if (free_size > 0) {
-      if ((free_size % sizeof(file_list_entry_t)) != 0) {
-        ESP_LOGW(TAG, "free_size=%d is not multiple of file_list_entry_t:", free_size);
+      uint32_t local_size;
+      // if file exists, save the entry only if local_size < remote size
+      if (get_file_size(entry->index, &local_size)) {
+        if (local_size > entry->size) {
+          ESP_LOGW(TAG, "local size (%d) of file_index=%d more than remote size (%d)", local_size, entry->index, entry->size);
+          continue;
+        } else if (local_size == entry->size) {
+          continue;
+        }
       }
 
-      // TODO: check whether file is needed before sending to the ringbuffer
-
-      // store up to min(free_size, btw) bytes
-      uint16_t write_size = free_size;
-      if (write_size > btw) write_size = btw;
-      xRingbufferSend(local_state.file_entries, data, write_size, 0);
-
-      return true;
+      entry->size = local_size + 1;
+      if (xQueueSend(local_state.file_entries, entry, 0) == pdTRUE) {
+        ESP_LOGI(TAG, "queuing read of file_index=%d at offset=%d", entry->index, entry->size);
+      } else {
+        // no more space in queue, no point parsing further
+        break;
+      }
     }
 
     return true;
@@ -202,7 +208,7 @@ void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
 
   memset(&local_state, 0, sizeof(local_state));
-  local_state.file_entries = xRingbufferCreate(CONFIG_LEN_FILE_LIST * sizeof(file_list_entry_t), RINGBUF_TYPE_BYTEBUF);
+  local_state.file_entries = xQueueCreate(CONFIG_LEN_FILE_LIST, sizeof(file_list_entry_t));
 
   assert(local_state.file_entries != NULL);
 
@@ -226,12 +232,10 @@ void mtftp_task(void *pvParameter) {
       vTaskDelay(100 / portTICK_PERIOD_MS);
     } else if (local_state.state == STATE_START_READ) {
       // if files are available in file_entries, start reading the next one
-      size_t read;
-      file_list_entry_t *entry = (file_list_entry_t *) xRingbufferReceiveUpTo(local_state.file_entries, &read, 0, sizeof(file_list_entry_t));
+      file_list_entry_t entry;
 
-      if (entry != NULL) {
-        client.beginRead(entry->index, 0, CONFIG_WINDOW_SIZE);
-        vRingbufferReturnItem(local_state.file_entries, (void *) entry);
+      if (xQueueReceive(local_state.file_entries, &entry, 0) == pdTRUE) {
+        client.beginRead(entry.index, entry.size, CONFIG_WINDOW_SIZE);
         local_state.state = STATE_ACTIVE;
       } else {
         ESP_LOGI(TAG, "no more files queued");
