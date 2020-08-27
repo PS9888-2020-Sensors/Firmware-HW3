@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -120,6 +121,31 @@ void sd_init(void) {
   }
 
   sdmmc_card_print_info(stdout, card);
+}
+
+bool get_file_size(uint16_t file_index, uint32_t *size) {
+  const char *TAG = "get_file_size";
+
+  char fname[LEN_MAX_FNAME];
+  snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+
+  FILE *fp = fopen(fname, "r");
+
+  if (fp == NULL) {
+    return false;
+  }
+
+  if (fseeko(fp, 0, SEEK_END) != 0) {
+    ESP_LOGE(TAG, "fseek %s failed", fname);
+    return false;
+  }
+
+  *size = ftello(fp);
+  fclose(fp);
+
+  ESP_LOGI(TAG, "file_index=%d has size=%d", file_index, *size);
+
+  return true;
 }
 
 esp_err_t espnow_add_peer(const uint8_t *peer_addr) {

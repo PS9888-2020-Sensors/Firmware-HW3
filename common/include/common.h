@@ -19,6 +19,8 @@ void wifi_init(void);
 void espnow_init(void);
 void sd_init(void);
 
+bool get_file_size(uint16_t file_index, uint32_t *size);
+
 esp_err_t espnow_add_peer(const uint8_t *peer_addr);
 // two separate functions for setting addr/sending data so that
 // caller of sendEspNow dosent need to know the address

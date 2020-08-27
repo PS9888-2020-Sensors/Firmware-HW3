@@ -63,7 +63,6 @@ static uint16_t buildFileList(file_list_entry_t entries[]) {
   if (d == NULL) return 0;
 
   struct dirent *dir;
-  FILE *fp;
 
   char *dummy;
 
@@ -74,24 +73,11 @@ static uint16_t buildFileList(file_list_entry_t entries[]) {
 
     entries[count].index = strtoul(dir->d_name, &dummy, 10);
 
-    char fname[LEN_MAX_FNAME];
-    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, entries[count].index);
-    fp = fopen(fname, "r");
-
-    if (fp == NULL) {
-      ESP_LOGE(TAG, "fopen %s failed", fname);
+    if (!get_file_size(entries[count].index, &(entries[count].size))) {
       continue;
     }
 
-    if (fseeko(fp, 0, SEEK_END) != 0) {
-      ESP_LOGE(TAG, "fseek %s failed", fname);
-      continue;
-    }
-
-    entries[count].size = ftello(fp);
-    fclose(fp);
-
-    ESP_LOGD(TAG, "filename=%s size=%d", fname, entries[count].size);
+    ESP_LOGD(TAG, "filename=%s size=%d", dir->d_name, entries[count].size);
     count++;
   }
 
@@ -132,7 +118,7 @@ static bool readFileList(uint32_t file_offset, uint8_t *data, uint16_t btr, uint
   } else {
     *br = btr;
   }
-  
+
   memcpy(data, local_state.file_list + file_offset, *br);
 
   return true;
@@ -210,7 +196,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       ESP_LOGD(TAG, "received packet from non peer");
     }
   }
-  
+
   ESP_LOGD(TAG, "end");
 }
 
