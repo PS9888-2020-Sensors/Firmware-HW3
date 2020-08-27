@@ -4,3 +4,6 @@
 [submodule "node/components/mtftp"]
 	path = node/components/mtftp
 	url = https://github.com/PS9888-2020-Sensors/mtftp.git
+[submodule "sniffer/components/mtftp"]
+	path = sniffer/components/mtftp
+	url = https://github.com/PS9888-2020-Sensors/mtftp.git
