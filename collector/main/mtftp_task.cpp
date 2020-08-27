@@ -89,10 +89,15 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
 
     snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
 
-    local_state.fp = fopen(fname, "a");
+    // `r+` is used here because `a` does not allow writing to the middle of the file
+    // but `r+` fails if the file does not exist, so open in `w` (create new) if so
+    local_state.fp = fopen(fname, "r+");
     if (local_state.fp == NULL) {
-      ESP_LOGE(TAG, "fopen %s failed", fname);
-      return false;
+      local_state.fp = fopen(fname, "w");
+      if (local_state.fp == NULL) {
+        ESP_LOGE(TAG, "fopen %s failed", fname);
+        return false;
+      }
     }
 
     if (setvbuf(local_state.fp, NULL, _IOFBF, CONFIG_WRITE_BUF_SIZE) != 0) {
