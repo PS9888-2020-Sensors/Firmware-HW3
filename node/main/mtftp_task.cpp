@@ -171,9 +171,12 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
 
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   const char *TAG = "onRecvEspNowCb";
+  static bool received_non_sync = false;
   ESP_LOGD(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
 
-  if (local_state.state == STATE_WAIT_PEER) {
+  if (local_state.state == STATE_WAIT_PEER || !received_non_sync) {
+    // if !received_non_sync, collector likely did not receive the SYNC reply
+    // accept more SYNC packets until the collector stops sending SYNCs
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
       ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
 
@@ -186,9 +189,14 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       local_state.state = STATE_ACTIVE;
 
       local_state.time_last_packet = esp_timer_get_time();
+      received_non_sync = false;
+      return;
     }
-  } else if (local_state.state == STATE_ACTIVE) {
+  }
+  
+  if (local_state.state == STATE_ACTIVE) {
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
+      received_non_sync = true;
       server.onPacketRecv(data, (uint16_t) len);
 
       if (!server.isIdle()) local_state.time_last_packet = esp_timer_get_time();
@@ -196,8 +204,6 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       ESP_LOGD(TAG, "received packet from non peer");
     }
   }
-
-  ESP_LOGD(TAG, "end");
 }
 
 static void endPeered(void) {
