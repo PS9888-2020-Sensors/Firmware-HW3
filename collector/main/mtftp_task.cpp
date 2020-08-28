@@ -71,9 +71,11 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
         } else if (local_size == entry->size) {
           continue;
         }
-      }
 
-      entry->size = local_size + 1;
+        entry->size = local_size + 1;
+      } else {
+        entry->size = 0;
+      }
       if (xQueueSend(local_state.file_entries, entry, 0) == pdTRUE) {
         ESP_LOGI(TAG, "queuing read of file_index=%d at offset=%d", entry->index, entry->size);
       } else {
