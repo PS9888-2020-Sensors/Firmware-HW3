@@ -59,7 +59,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     }
 
     file_list_entry_t *entry;
-    for (uint16_t i = 0; (i + 1) * sizeof(file_list_entry_t) < btw; i++) {
+    for (uint16_t i = 0; (i + 1) * sizeof(file_list_entry_t) <= btw; i++) {
       entry = (file_list_entry_t *) (data + (i * sizeof(file_list_entry_t)));
 
       uint32_t local_size;
