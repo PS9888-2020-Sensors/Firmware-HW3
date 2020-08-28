@@ -58,7 +58,10 @@ void setEspNowTxAddr(uint8_t *addr) {
 
 void sendEspNow(const uint8_t *data, uint8_t len) {
   #ifdef CONFIG_SIMULATE_PACKET_LOSS
-    if (esp_random() % CONFIG_PACKET_LOSS_MOD == 0) return;
+    if (esp_random() % CONFIG_PACKET_LOSS_MOD == 0) {
+      ESP_LOGI("send", "drop data[0]=%02x", data[0]);
+      return;
+    }
   #endif
 
   while (xSemaphoreTake(can_tx, 50 / portTICK_PERIOD_MS) != pdTRUE) {
