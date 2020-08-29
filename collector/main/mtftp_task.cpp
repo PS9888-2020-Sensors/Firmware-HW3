@@ -1,4 +1,5 @@
 #include <string.h>
+#include <dirent.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -188,6 +189,37 @@ static void transferEnd(void) {
   local_state.state = STATE_START_READ;
 }
 
+static void clear_files(void) {
+  const char *TAG = "clear_files";
+
+  ESP_LOGW(TAG, "clearing all files in root directory of SD card!");
+
+  DIR *d = opendir(SD_MOUNT_POINT);
+
+  if (d == NULL) {
+    ESP_LOGW(TAG, "failed to open %s", SD_MOUNT_POINT);
+  }
+
+  struct dirent *dir;
+  char fname[LEN_MAX_FNAME];
+
+  while ((dir = readdir(d)) != NULL) {
+    if (dir->d_type != DT_REG) continue;
+
+    if (snprintf(fname, LEN_MAX_FNAME, "%s/%s", SD_MOUNT_POINT, dir->d_name) == LEN_MAX_FNAME) {
+      ESP_LOGD(TAG, "possible truncation");
+    };
+
+    if (remove(fname) == 0) {
+      ESP_LOGI(TAG, "removed %s", fname);
+    } else {
+      ESP_LOGW(TAG, "failed to remove %s", fname);
+    }
+  }
+
+  closedir(d);
+}
+
 static void rate_logging_task(void *pvParameter) {
   const char *TAG = "transfer";
 
@@ -210,6 +242,34 @@ static void client_loop_task(void *pvParameter) {
   }
 }
 
+static void led_task(void *pvParameter) {
+  // on, period (us)
+  const uint32_t led_blink[][2] = {
+    {50000, 3000000},
+    {100000, 500000}
+  };
+
+  uint8_t blink_index = 0;
+
+  while(1) {
+    if (local_state.state == STATE_FIND_PEER) {
+      blink_index = 0;
+    } else {
+      blink_index = 1;
+    }
+
+    int64_t time = esp_timer_get_time();
+
+    if ((time % led_blink[blink_index][1]) < led_blink[blink_index][0]) {
+      set_led(1);
+    } else {
+      set_led(0);
+    }
+
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+}
+
 void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
 
@@ -217,6 +277,10 @@ void mtftp_task(void *pvParameter) {
   local_state.file_entries = xQueueCreate(CONFIG_LEN_FILE_LIST, sizeof(file_list_entry_t));
 
   assert(local_state.file_entries != NULL);
+
+  if (get_btn_user() == 0) {
+    clear_files();
+  }
 
   setEspNowTxAddr(local_state.peer_addr);
   esp_now_register_recv_cb(onRecvEspNowCb);
@@ -229,6 +293,7 @@ void mtftp_task(void *pvParameter) {
 
   xTaskCreate(client_loop_task, "client_loop_task", 4096, NULL, 5, NULL);
   xTaskCreate(rate_logging_task, "rate_logging_task", 2048, NULL, 3, NULL);
+  xTaskCreate(led_task, "led_task", 2048, NULL, 3, NULL);
 
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {

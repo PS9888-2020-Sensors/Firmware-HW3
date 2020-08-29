@@ -11,3 +11,6 @@ const gpio_num_t GPIO_SPI_CS_ADC = GPIO_NUM_23;
 const gpio_num_t GPIO_SPI_CS_BME = GPIO_NUM_22;
 
 const gpio_num_t GPIO_POWER_SEL = GPIO_NUM_18;
+
+const gpio_num_t GPIO_LED = GPIO_NUM_5;
+const gpio_num_t GPIO_BTN_USER = GPIO_NUM_39;
