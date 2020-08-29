@@ -21,6 +21,7 @@ void sd_init(void);
 void hw_init(void);
 
 void set_led(bool on);
+int get_btn_user(void);
 
 bool get_file_size(uint16_t file_index, uint32_t *size);
 

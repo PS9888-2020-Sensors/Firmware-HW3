@@ -52,11 +52,17 @@ void wifi_init(void) {
 void hw_init(void) {
   gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
 
+  gpio_set_direction(GPIO_BTN_USER, GPIO_MODE_INPUT);
+
   set_led(0);
 }
 
 void set_led(bool on) {
   gpio_set_level(GPIO_LED, on);
+}
+
+int get_btn_user(void) {
+  return gpio_get_level(GPIO_BTN_USER);
 }
 
 SemaphoreHandle_t can_tx;
