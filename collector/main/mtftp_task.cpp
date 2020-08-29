@@ -227,7 +227,7 @@ void mtftp_task(void *pvParameter) {
   client.setOnTimeoutCb(&endPeered);
   client.setOnTransferEndCb(&transferEnd);
 
-  xTaskCreate(client_loop_task, "client_loop_task", 2048, NULL, 5, NULL);
+  xTaskCreate(client_loop_task, "client_loop_task", 4096, NULL, 5, NULL);
   xTaskCreate(rate_logging_task, "rate_logging_task", 2048, NULL, 3, NULL);
 
   while(1) {
