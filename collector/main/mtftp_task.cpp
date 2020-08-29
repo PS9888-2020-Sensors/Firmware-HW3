@@ -210,6 +210,34 @@ static void client_loop_task(void *pvParameter) {
   }
 }
 
+static void led_task(void *pvParameter) {
+  // on, period (us)
+  const uint32_t led_blink[][2] = {
+    {50000, 3000000},
+    {100000, 500000}
+  };
+
+  uint8_t blink_index = 0;
+
+  while(1) {
+    if (local_state.state == STATE_FIND_PEER) {
+      blink_index = 0;
+    } else {
+      blink_index = 1;
+    }
+
+    int64_t time = esp_timer_get_time();
+
+    if ((time % led_blink[blink_index][1]) < led_blink[blink_index][0]) {
+      set_led(1);
+    } else {
+      set_led(0);
+    }
+
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+}
+
 void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
 
@@ -229,6 +257,7 @@ void mtftp_task(void *pvParameter) {
 
   xTaskCreate(client_loop_task, "client_loop_task", 4096, NULL, 5, NULL);
   xTaskCreate(rate_logging_task, "rate_logging_task", 2048, NULL, 3, NULL);
+  xTaskCreate(led_task, "led_task", 2048, NULL, 3, NULL);
 
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {

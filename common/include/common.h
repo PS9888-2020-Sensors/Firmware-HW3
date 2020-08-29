@@ -18,6 +18,9 @@ void nvs_init(void);
 void wifi_init(void);
 void espnow_init(void);
 void sd_init(void);
+void hw_init(void);
+
+void set_led(bool on);
 
 bool get_file_size(uint16_t file_index, uint32_t *size);
 

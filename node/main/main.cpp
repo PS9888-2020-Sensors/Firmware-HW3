@@ -17,6 +17,8 @@ extern "C" {
 }
 
 void app_main(void) {
+  hw_init();
+
   nvs_init();
   wifi_init();
   espnow_init();

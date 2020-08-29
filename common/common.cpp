@@ -49,6 +49,16 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(ESP_IF_WIFI_STA, true, DATA_RATE));
 }
 
+void hw_init(void) {
+  gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
+
+  set_led(0);
+}
+
+void set_led(bool on) {
+  gpio_set_level(GPIO_LED, on);
+}
+
 SemaphoreHandle_t can_tx;
 uint8_t *espnow_tx_addr = NULL;
 
