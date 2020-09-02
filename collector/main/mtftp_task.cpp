@@ -207,7 +207,7 @@ static void clear_files(void) {
     if (dir->d_type != DT_REG) continue;
 
     if (snprintf(fname, LEN_MAX_FNAME, "%s/%s", SD_MOUNT_POINT, dir->d_name) == LEN_MAX_FNAME) {
-      ESP_LOGD(TAG, "possible truncation");
+      printf("possible truncation");
     };
 
     if (remove(fname) == 0) {
