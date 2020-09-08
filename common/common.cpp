@@ -50,8 +50,8 @@ void wifi_init(void) {
 }
 
 void hw_init(void) {
+  gpio_set_direction(GPIO_POWER_SEL, GPIO_MODE_OUTPUT);
   gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
-
   gpio_set_direction(GPIO_BTN_USER, GPIO_MODE_INPUT);
 
   set_led(0);
@@ -112,8 +112,7 @@ void sd_init(void) {
     .allocation_unit_size = 16 * 1024
   };
 
-  gpio_set_direction(GPIO_POWER_SEL, GPIO_MODE_OUTPUT);
-  sd_activate();
+  aux_activate();
 
   vTaskDelay(500 / portTICK_RATE_MS);
 
@@ -177,10 +176,10 @@ esp_err_t espnow_add_peer(const uint8_t *peer_addr) {
   return esp_now_add_peer(&peer);
 }
 
-void sd_activate(void) {
+void aux_activate(void) {
   gpio_set_level(GPIO_POWER_SEL, 0);
 }
 
-void sd_deactivate(void) {
+void aux_deactivate(void) {
   gpio_set_level(GPIO_POWER_SEL, 1);
 }

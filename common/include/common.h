@@ -31,8 +31,8 @@ esp_err_t espnow_add_peer(const uint8_t *peer_addr);
 void setEspNowTxAddr(uint8_t *addr);
 void sendEspNow(const uint8_t *data, uint8_t len);
 
-void sd_activate(void);
-void sd_deactivate(void);
+void aux_activate(void);
+void aux_deactivate(void);
 
 extern const char *SD_MOUNT_POINT;
 #define LEN_SYNC_PACKET 8
