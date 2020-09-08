@@ -7,6 +7,8 @@
 #include "driver/uart.h"
 #include <sys/time.h>
 
+#include "board.h"
+
 static QueueHandle_t uart_queue;
 static const int UART_NUM = UART_NUM_2;
 static const int LEN_BUF_TX = 256;
@@ -30,7 +32,7 @@ void time_sync_task(void *pvParameter) {
 
   uart_driver_install(UART_NUM, LEN_BUF_RX, LEN_BUF_TX, QUEUE_LEN, &uart_queue, 0);
   uart_param_config(UART_NUM, &uart_config);
-  uart_set_pin(UART_NUM, GPIO_NUM_17, GPIO_NUM_16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+  uart_set_pin(UART_NUM, GPIO_UART1_TXD, GPIO_UART1_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
   uart_enable_pattern_det_baud_intr(UART_NUM, '\r', 1, 9, 0, 0);
   uart_pattern_queue_reset(UART_NUM, QUEUE_LEN);
