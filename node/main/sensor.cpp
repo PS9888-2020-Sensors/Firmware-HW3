@@ -11,6 +11,8 @@
 #define BME280_FLOAT_ENABLE
 #include "bme280/bme280.h"
 
+static const char *TAG = "sensor_task";
+
 void user_delay_us(uint32_t period, void *intf_ptr)
 {
   // this is a busy loop, but delay is only used in init/reset
@@ -101,12 +103,11 @@ static spi_device_handle_t spi_init(void) {
   return spi;
 }
 
-void sensor_task(void *pvParameter) {
-  const char *TAG = "sensor_task";
+struct bme280_dev dev;
+spi_device_handle_t spi;
 
-  spi_device_handle_t spi = spi_init();
-
-  struct bme280_dev dev;
+void sensor_init(void) {
+  spi = spi_init();
 
   dev.intf_ptr = &spi;
   dev.intf = BME280_SPI_INTF;
@@ -116,27 +117,32 @@ void sensor_task(void *pvParameter) {
 
   if (bme280_init(&dev) != BME280_OK) {
     ESP_LOGW(TAG, "Failed to initialise BME280!");
-    while(1) vTaskDelay(100);
+    abort();
   }
 
   dev.settings.osr_h = BME280_OVERSAMPLING_1X;
-  dev.settings.osr_p = BME280_OVERSAMPLING_4X;
+  dev.settings.osr_p = BME280_OVERSAMPLING_1X;
   dev.settings.osr_t = BME280_OVERSAMPLING_1X;
-  dev.settings.filter = BME280_FILTER_COEFF_16;
+  dev.settings.filter = BME280_FILTER_COEFF_2;
 
   uint8_t settings_sel = BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL | BME280_FILTER_SEL;
-  struct bme280_data comp_data;
 
   bme280_set_sensor_settings(settings_sel, &dev);
   bme280_set_sensor_mode(BME280_FORCED_MODE, &dev);
 
-  ESP_LOGI(TAG, "min delay = %d", bme280_cal_meas_delay(&(dev.settings)));
+  ESP_LOGI(TAG, "min delay = %dms", bme280_cal_meas_delay(&(dev.settings)));
+}
 
-  while(1) {
-    bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
-    ESP_LOGI(TAG, "bme280: %f, %f, %f\r\n",comp_data.temperature, comp_data.pressure, comp_data.humidity);
+uint32_t sensor_read(void) {
+  struct bme280_data comp_data;
+  bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
 
-    vTaskDelay(20 / portTICK_PERIOD_MS);
-    bme280_set_sensor_mode(BME280_FORCED_MODE, &dev);
-  }
+  ESP_LOGV(TAG, "bme280: temp=%f pressure=%f humidity=%f",comp_data.temperature, comp_data.pressure, comp_data.humidity);
+
+  // convert the float into a 24 bit int (very crudely)
+  return ((uint32_t) (comp_data.pressure * 100)) & 0xFFFFFF;
+}
+
+void sensor_start_read(void) {
+  bme280_set_sensor_mode(BME280_FORCED_MODE, &dev);
 }
