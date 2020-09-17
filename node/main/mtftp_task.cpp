@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <errno.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
@@ -47,6 +48,10 @@ static uint16_t countFiles(void) {
   while ((dir = readdir(d)) != NULL) {
     ESP_LOGD(TAG, "file=%s, type=%d", dir->d_name, dir->d_type);
 
+    errno = 0;
+    strtoul(dir->d_name, NULL, 10);
+    if (errno != 0) continue;
+
     if (dir->d_type == DT_REG) count++;
   }
 
@@ -63,15 +68,14 @@ static uint16_t buildFileList(file_list_entry_t entries[]) {
   if (d == NULL) return 0;
 
   struct dirent *dir;
-
-  char *dummy;
-
   uint16_t count = 0;
 
   while ((dir = readdir(d)) != NULL) {
     if (dir->d_type != DT_REG) continue;
 
-    entries[count].index = strtoul(dir->d_name, &dummy, 10);
+    errno = 0;
+    entries[count].index = strtoul(dir->d_name, NULL, 10);
+    if (errno != 0) continue;
 
     if (!get_file_size(entries[count].index, &(entries[count].size))) {
       continue;
@@ -193,7 +197,7 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
       return;
     }
   }
-  
+
   if (local_state.state == STATE_ACTIVE) {
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
       received_non_sync = true;
