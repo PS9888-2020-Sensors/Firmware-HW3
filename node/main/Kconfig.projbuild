@@ -7,7 +7,7 @@ config READ_BUF_SIZE
     File read buffer size
 config SAMPLE_PERIOD
     int "Sample Period (us)"
-    default 1000
+    default 20000
     range 1000 1000000
     help
     File read buffer size
