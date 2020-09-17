@@ -19,15 +19,12 @@
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
 
-volatile uint32_t c = 0;
-
 static const char *TAG = "sample";
 
 TaskHandle_t sample_task_handle;
 
 static void ulp_isr(void *arg) {
   xTaskNotify(sample_task_handle, 0, eNoAction);
-  c ++;
 }
 
 void sample_task(void *pvParameter) {
@@ -49,15 +46,6 @@ void sample_task(void *pvParameter) {
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   sensor_init();
-
-  // while(1) {
-  //   struct timeval tv_now;
-  //   gettimeofday(&tv_now, NULL);
-  //   int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
-  //   ESP_LOGI("ulp", "%d, %lld", c, time_us);
-  //   c = 0;
-  //   vTaskDelay(100);
-  // }
 
   bool started_sampling = false;
   while(1) {
