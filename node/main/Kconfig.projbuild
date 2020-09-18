@@ -10,5 +10,11 @@ config SAMPLE_PERIOD
     default 20000
     range 1000 1000000
     help
-    File read buffer size
+    Period of sensor sampling
+config SAMPLE_BUFFER_SIZE
+    int "Sample Buffer Size (kB)"
+    default 128
+    range 1 1024
+    help
+    Two buffers of this size will be allocated to buffer sample data
 endmenu

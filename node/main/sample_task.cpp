@@ -9,6 +9,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/ringbuf.h"
 #include "esp_log.h"
 
 #include "sensor.h"
@@ -22,13 +23,37 @@ extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
 static const char *TAG = "sample";
 
 TaskHandle_t sample_task_handle;
+TaskHandle_t sample_write_task_handle;
+
+RingbufHandle_t sample_buffers[2];
+uint8_t cur_buf = 0;
 
 static void ulp_isr(void *arg) {
   xTaskNotify(sample_task_handle, 0, eNoAction);
 }
 
+static void sample_write_task(void *pvParameter) {
+  // initialise buffers (in external PSRAM)
+  uint32_t buf_size = CONFIG_SAMPLE_BUFFER_SIZE * 1024;
+  for(uint8_t i = 0; i < 2; i++) {
+    StaticRingbuffer_t *buf_struct = (StaticRingbuffer_t *) heap_caps_malloc(sizeof(StaticRingbuffer_t), MALLOC_CAP_SPIRAM);
+    uint8_t *buf = (uint8_t *) heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    assert(buf_struct != NULL);
+    assert(buf != NULL);
+
+    sample_buffers[i] = xRingbufferCreateStatic(buf_size, RINGBUF_TYPE_BYTEBUF, buf, buf_struct);
+  }
+
+  while(1) {
+    uint32_t buf_index;
+    xTaskNotifyWait(0, 0, &buf_index, portMAX_DELAY);
+    ESP_LOGI(TAG, "writing buffer %d to file", buf_index);
+  }
+}
+
 void sample_task(void *pvParameter) {
   sample_task_handle = xTaskGetCurrentTaskHandle();
+  xTaskCreate(sample_write_task, "sample_write_task", 4096, NULL, 5, &sample_write_task_handle);
 
   ESP_ERROR_CHECK(ulp_load_binary(0, bin_start, (bin_end - bin_start) / sizeof(uint32_t)));
 
@@ -52,7 +77,16 @@ void sample_task(void *pvParameter) {
     xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
 
     if (started_sampling) {
-      ESP_LOGI(TAG, "%d", sensor_read());
+      float val = sensor_read();
+      if (xRingbufferSend(sample_buffers[cur_buf], &val, sizeof(float), 0) == pdFALSE) {
+        xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
+
+        // write current value to other buffer
+        cur_buf = !cur_buf;
+        if (xRingbufferSend(sample_buffers[cur_buf], &val, sizeof(float), 0) == pdFALSE) {
+          ESP_LOGW(TAG, "value lost: could not write to either buffer");
+        }
+      }
     }
 
     started_sampling = true;
