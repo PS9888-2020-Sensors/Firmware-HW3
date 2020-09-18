@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -139,6 +140,16 @@ void sd_init(void) {
   }
 
   sdmmc_card_print_info(stdout, card);
+}
+
+bool conv_strtoul(char *str, uint16_t *num) {
+  errno = 0;
+  uint16_t val = strtoul(str, NULL, 10);
+  if (errno != 0) return false;
+
+  if (num != NULL) *num = val;
+
+  return true;
 }
 
 bool get_file_size(uint16_t file_index, uint32_t *size) {
