@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/time.h>
+#include <dirent.h>
 #include "driver/rtc_cntl.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp32/ulp.h"
@@ -14,6 +15,7 @@
 #include "sensor.h"
 
 #include "sample_task.h"
+#include "common.h"
 #include "board.h"
 
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
@@ -25,10 +27,38 @@ TaskHandle_t sample_task_handle;
 TaskHandle_t sample_write_task_handle;
 
 char *sample_buffers[2];
+uint32_t sample_count[2] = {0};
+uint64_t sample_start_time[2] = {0};
 uint8_t cur_buf = 0;
 
 static void ulp_isr(void *arg) {
   xTaskNotify(sample_task_handle, 0, eNoAction);
+}
+
+static uint16_t get_largest_file(void) {
+  const char *TAG = "get_largest_file";
+
+  uint16_t largest = 0;
+
+  DIR *d = opendir(SD_MOUNT_POINT);
+  if (d == NULL) {
+    ESP_LOGW(TAG, "failed to open %s", SD_MOUNT_POINT);
+    return largest;
+  }
+
+  struct dirent *dir;
+
+  while ((dir = readdir(d)) != NULL) {
+    if (dir->d_type != DT_REG) continue;
+
+    uint16_t num;
+    if (!conv_strtoul(dir->d_name, &num)) continue;
+
+    if (num > largest) largest = num;
+  }
+
+  closedir(d);
+  return largest;
 }
 
 static void sample_write_task(void *pvParameter) {
@@ -37,10 +67,57 @@ static void sample_write_task(void *pvParameter) {
     sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(float), MALLOC_CAP_SPIRAM);
   }
 
+  uint16_t file_index = get_largest_file();
+
+  if (file_index == 0) {
+    file_index = 1;
+  } else {
+    file_index ++;
+  }
+
+  ESP_LOGI(TAG, "samples will be written to file_index=%d", file_index);
+
+  char * file_buffer = (char *) malloc(CONFIG_WRITE_BUF_SIZE);
+
+  assert(file_buffer != NULL);
+
+  struct __attribute__((__packed__)) {
+    char header[3] = {'H', 'D', 'R'};
+    uint64_t timestamp;
+    uint8_t sample_size;
+    uint32_t sample_count;
+  } chunk_header;
+
   while(1) {
     uint32_t buf_index;
     xTaskNotifyWait(0, 0, &buf_index, portMAX_DELAY);
     ESP_LOGI(TAG, "writing buffer %d to file", buf_index);
+
+    char fname[LEN_MAX_FNAME];
+    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+
+    FILE *fp = fopen(fname, "a");
+    if (fp == NULL) {
+      ESP_LOGE(TAG, "fopen %s failed", fname);
+      continue;
+    }
+
+    if (setvbuf(fp, file_buffer, _IOFBF, CONFIG_WRITE_BUF_SIZE) != 0) {
+      ESP_LOGE(TAG, "setvbuf failed");
+      continue;
+    }
+
+    chunk_header.timestamp = sample_start_time[buf_index];
+    chunk_header.sample_size = sizeof(float);
+    chunk_header.sample_count = sample_count[buf_index] + 1;
+
+    fwrite(&chunk_header, sizeof(chunk_header), 1, fp);
+    fwrite(sample_buffers[buf_index], sizeof(float), sample_count[buf_index] + 1, fp);
+
+    fclose(fp);
+    ESP_LOGI(TAG, "write done");
+
+    sample_count[buf_index] = 0;
   }
 }
 
@@ -71,14 +148,21 @@ void sample_task(void *pvParameter) {
 
     if (started_sampling) {
       float val = sensor_read();
-      if (xRingbufferSend(sample_buffers[cur_buf], &val, sizeof(float), 0) == pdFALSE) {
+      *(((float *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
+      if (sample_count[cur_buf] == 0) {
+        struct timeval tv_now;
+        gettimeofday(&tv_now, NULL);
+        sample_start_time[cur_buf] = (uint64_t) tv_now.tv_sec * 1000000L + (uint64_t) tv_now.tv_usec;
+      }
+
+      sample_count[cur_buf] ++;
+
+      if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1)) {
+        // notify other task to start write
         xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
 
-        // write current value to other buffer
+        // start using other buffer
         cur_buf = !cur_buf;
-        if (xRingbufferSend(sample_buffers[cur_buf], &val, sizeof(float), 0) == pdFALSE) {
-          ESP_LOGW(TAG, "value lost: could not write to either buffer");
-        }
       }
     }
 

@@ -4,17 +4,23 @@ config READ_BUF_SIZE
     default 8192
     range 1024 16384
     help
-    File read buffer size
+    File read buffer size. Used by mtftp tatsk
+config WRITE_BUF_SIZE
+    int "Read Buffer Size"
+    default 8192
+    range 1024 16384
+    help
+    File write buffer size. Used by sample task
 config SAMPLE_PERIOD
     int "Sample Period (us)"
     default 20000
     range 1000 1000000
     help
     Period of sensor sampling
-config SAMPLE_BUFFER_SIZE
-    int "Sample Buffer Size (kB)"
+config SAMPLE_BUFFER_NUM
+    int "Number of samples to buffer"
     default 128
     range 1 1024
     help
-    Two buffers of this size will be allocated to buffer sample data
+    Two buffers will be allocated to each hold SAMPLE_BUFFER_NUM amount of samples
 endmenu
