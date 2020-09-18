@@ -133,14 +133,14 @@ void sensor_init(void) {
   ESP_LOGI(TAG, "min delay = %dms", bme280_cal_meas_delay(&(dev.settings)));
 }
 
-uint32_t sensor_read(void) {
+float sensor_read(void) {
   struct bme280_data comp_data;
   bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
 
   ESP_LOGV(TAG, "bme280: temp=%f pressure=%f humidity=%f",comp_data.temperature, comp_data.pressure, comp_data.humidity);
 
   // convert the float into a 24 bit int (very crudely)
-  return ((uint32_t) (comp_data.pressure * 100)) & 0xFFFFFF;
+  return comp_data.pressure;
 }
 
 void sensor_start_read(void) {
