@@ -7,6 +7,7 @@
 #include "common.h"
 #include "mtftp_task.h"
 #include "time_sync_task.h"
+#include "sample_task.h"
 
 #include "sdkconfig.h"
 
@@ -19,11 +20,17 @@ extern "C" {
 void app_main(void) {
   hw_init();
 
-  nvs_init();
-  wifi_init();
-  espnow_init();
+  // nvs_init();
+  // wifi_init();
+  // espnow_init();
 
-  sd_init();
+  // sd_init();
 
-  xTaskCreatePinnedToCore(mtftp_task, "mtftp_task", 8192, NULL, 4, NULL, 1);
+  aux_activate();
+
+  vTaskDelay(50);
+
+  // xTaskCreatePinnedToCore(mtftp_task, "mtftp_task", 8192, NULL, 4, NULL, 1);
+  xTaskCreate(sample_task, "sample_task", 4096, NULL, 10, NULL);
+  // xTaskCreate(time_sync_task, "time_sync_task", 4096, NULL, 4, NULL);
 }

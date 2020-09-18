@@ -7,12 +7,13 @@
 #include "driver/uart.h"
 #include <sys/time.h>
 
+#include "board.h"
+
 static QueueHandle_t uart_queue;
 static const int UART_NUM = UART_NUM_2;
 static const int LEN_BUF_TX = 256;
 static const int LEN_BUF_RX = 256;
-// GPZDA looks to be max 36 chars + 2 for CRLF + 1 for NULL
-static const int LEN_BUF_READ = 40;
+static const int LEN_BUF_READ = 128;
 static const int QUEUE_LEN = 8;
 
 void time_sync_task(void *pvParameter) {
@@ -30,15 +31,10 @@ void time_sync_task(void *pvParameter) {
 
   uart_driver_install(UART_NUM, LEN_BUF_RX, LEN_BUF_TX, QUEUE_LEN, &uart_queue, 0);
   uart_param_config(UART_NUM, &uart_config);
-  uart_set_pin(UART_NUM, GPIO_NUM_17, GPIO_NUM_16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+  uart_set_pin(UART_NUM, GPIO_UART1_TXD, GPIO_UART1_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
   uart_enable_pattern_det_baud_intr(UART_NUM, '\r', 1, 9, 0, 0);
   uart_pattern_queue_reset(UART_NUM, QUEUE_LEN);
-
-  // configure module to tx at 115200 baud
-  uart_write_bytes(UART_NUM, "$PUBX,41,1,0007,0003,115200,0*18\r\n", 36);
-  uart_wait_tx_done(UART_NUM, portMAX_DELAY);
-  uart_set_baudrate(UART_NUM, 115200);
 
   // disable all messages
   uart_write_bytes(UART_NUM, "$PUBX,40,GSA,0,0,0,0,0,0*4E\r\n", 29);
@@ -49,6 +45,11 @@ void time_sync_task(void *pvParameter) {
 
   // enable ZDA (date time)
   uart_write_bytes(UART_NUM, "$PUBX,40,ZDA,0,1,0,0,0,0*45\r\n", 29);
+
+  // configure module to tx at 115200 baud
+  uart_write_bytes(UART_NUM, "$PUBX,41,1,0007,0003,115200,0*18\r\n", 36);
+  uart_wait_tx_done(UART_NUM, portMAX_DELAY);
+  uart_set_baudrate(UART_NUM, 115200);
 
   uart_event_t evt;
   char buf_read[LEN_BUF_READ];

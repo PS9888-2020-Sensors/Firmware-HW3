@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "driver/gpio.h"
+#include "driver/spi_master.h"
 
 const spi_host_device_t SENSOR_SPI_HOST = SPI2_HOST;
 const uint32_t SENSOR_SPI_SPEED = 1000000;
@@ -14,3 +15,6 @@ const gpio_num_t GPIO_POWER_SEL = GPIO_NUM_18;
 
 const gpio_num_t GPIO_LED = GPIO_NUM_5;
 const gpio_num_t GPIO_BTN_USER = GPIO_NUM_39;
+
+const gpio_num_t GPIO_UART1_TXD = GPIO_NUM_21;
+const gpio_num_t GPIO_UART1_RXD = GPIO_NUM_19;
