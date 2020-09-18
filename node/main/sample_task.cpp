@@ -9,7 +9,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/ringbuf.h"
 #include "esp_log.h"
 
 #include "sensor.h"
@@ -25,7 +24,7 @@ static const char *TAG = "sample";
 TaskHandle_t sample_task_handle;
 TaskHandle_t sample_write_task_handle;
 
-RingbufHandle_t sample_buffers[2];
+char *sample_buffers[2];
 uint8_t cur_buf = 0;
 
 static void ulp_isr(void *arg) {
@@ -34,14 +33,8 @@ static void ulp_isr(void *arg) {
 
 static void sample_write_task(void *pvParameter) {
   // initialise buffers (in external PSRAM)
-  uint32_t buf_size = CONFIG_SAMPLE_BUFFER_SIZE * 1024;
   for(uint8_t i = 0; i < 2; i++) {
-    StaticRingbuffer_t *buf_struct = (StaticRingbuffer_t *) heap_caps_malloc(sizeof(StaticRingbuffer_t), MALLOC_CAP_SPIRAM);
-    uint8_t *buf = (uint8_t *) heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
-    assert(buf_struct != NULL);
-    assert(buf != NULL);
-
-    sample_buffers[i] = xRingbufferCreateStatic(buf_size, RINGBUF_TYPE_BYTEBUF, buf, buf_struct);
+    sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(float), MALLOC_CAP_SPIRAM);
   }
 
   while(1) {
