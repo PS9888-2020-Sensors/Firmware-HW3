@@ -18,6 +18,9 @@
 #include "common.h"
 #include "board.h"
 
+uint16_t sample_file_index;
+SemaphoreHandle_t sample_file_semaph;
+
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
 
@@ -67,19 +70,23 @@ static void sample_write_task(void *pvParameter) {
     sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(float), MALLOC_CAP_SPIRAM);
   }
 
-  uint16_t file_index = get_largest_file();
+  sample_file_index = get_largest_file();
 
-  if (file_index == 0) {
-    file_index = 1;
+  if (sample_file_index == 0) {
+    sample_file_index = 1;
   } else {
-    file_index ++;
+    sample_file_index ++;
   }
 
-  ESP_LOGI(TAG, "samples will be written to file_index=%d", file_index);
+  ESP_LOGI(TAG, "samples will be written to file_index=%d", sample_file_index);
 
   char * file_buffer = (char *) malloc(CONFIG_WRITE_BUF_SIZE);
 
   assert(file_buffer != NULL);
+
+  sample_file_semaph = xSemaphoreCreateBinary();
+  // initialise to 1
+  xSemaphoreGive(sample_file_semaph);
 
   struct __attribute__((__packed__)) {
     char header[3] = {'H', 'D', 'R'};
@@ -93,8 +100,16 @@ static void sample_write_task(void *pvParameter) {
     xTaskNotifyWait(0, 0, &buf_index, portMAX_DELAY);
     ESP_LOGI(TAG, "writing buffer %d to file", buf_index);
 
+    if (xSemaphoreTake(sample_file_semaph, 0) == pdFALSE) {
+      ESP_LOGI(TAG, "waiting to acquire semaphore");
+      // TODO: make this timeout, if fail to acquire then write to
+      // sample_file_index ++
+      xSemaphoreTake(sample_file_semaph, portMAX_DELAY);
+      ESP_LOGI(TAG, "taken semaphore");
+    }
+
     char fname[LEN_MAX_FNAME];
-    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, sample_file_index);
 
     FILE *fp = fopen(fname, "a");
     if (fp == NULL) {
@@ -116,6 +131,7 @@ static void sample_write_task(void *pvParameter) {
 
     fclose(fp);
     ESP_LOGI(TAG, "write done");
+    xSemaphoreGive(sample_file_semaph);
 
     sample_count[buf_index] = 0;
   }
