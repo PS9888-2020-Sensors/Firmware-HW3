@@ -19,8 +19,8 @@ config SAMPLE_PERIOD
     Period of sensor sampling
 config SAMPLE_BUFFER_NUM
     int "Number of samples to buffer"
-    default 128
-    range 1 1024
+    default 512
+    range 1 32768
     help
     Two buffers will be allocated to each hold SAMPLE_BUFFER_NUM amount of samples
 endmenu
