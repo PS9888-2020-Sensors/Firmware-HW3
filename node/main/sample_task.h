@@ -21,4 +21,6 @@ void sample_task(void *pvParameter);
 extern uint16_t sample_file_index;
 extern SemaphoreHandle_t sample_file_semaph;
 
+extern SemaphoreHandle_t time_acquired_semaph;
+
 #endif

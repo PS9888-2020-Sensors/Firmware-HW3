@@ -20,6 +20,7 @@
 
 uint16_t sample_file_index;
 SemaphoreHandle_t sample_file_semaph;
+SemaphoreHandle_t time_acquired_semaph;
 
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
@@ -84,10 +85,6 @@ static void sample_write_task(void *pvParameter) {
 
   assert(file_buffer != NULL);
 
-  sample_file_semaph = xSemaphoreCreateBinary();
-  // initialise to 1
-  xSemaphoreGive(sample_file_semaph);
-
   struct __attribute__((__packed__)) {
     char header[3] = {'H', 'D', 'R'};
     uint64_t timestamp;
@@ -138,6 +135,11 @@ static void sample_write_task(void *pvParameter) {
 }
 
 void sample_task(void *pvParameter) {
+  sample_file_semaph = xSemaphoreCreateBinary();
+  // initialise to 1
+  xSemaphoreGive(sample_file_semaph);
+  time_acquired_semaph = xSemaphoreCreateBinary();
+
   sample_task_handle = xTaskGetCurrentTaskHandle();
   xTaskCreate(sample_write_task, "sample_write_task", 4096, NULL, 5, &sample_write_task_handle);
 
@@ -154,6 +156,9 @@ void sample_task(void *pvParameter) {
   REG_SET_BIT(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA_M);
   ESP_ERROR_CHECK(ulp_set_wakeup_period(0, CONFIG_SAMPLE_PERIOD));
 
+  ESP_LOGI(TAG, "waiting for time sync");
+  xSemaphoreTake(time_acquired_semaph, portMAX_DELAY);
+  ESP_LOGI(TAG, "starting sampling");
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   sensor_init();

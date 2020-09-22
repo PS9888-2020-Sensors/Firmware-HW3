@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -9,6 +10,8 @@
 
 #include "board.h"
 #include "common.h"
+
+#include "sample_task.h"
 
 static QueueHandle_t uart_queue;
 static const int UART_NUM = UART_NUM_2;
@@ -29,6 +32,10 @@ static void IRAM_ATTR pps_isr_handler(void *arg) {
   if ((esp_timer_get_time() - next_time_arrival) > 950000) return;
 
   settimeofday(&next_time, NULL);
+
+  BaseType_t xHigherPriorityTaskWoken;
+  xSemaphoreGiveFromISR(time_acquired_semaph, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
 }
 
 static void pps_init(void) {
