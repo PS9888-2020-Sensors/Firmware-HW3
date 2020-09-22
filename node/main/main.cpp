@@ -28,5 +28,5 @@ void app_main(void) {
 
   xTaskCreate(mtftp_task, "mtftp_task", 8192, NULL, 4, NULL);
   xTaskCreate(sample_task, "sample_task", 4096, NULL, 10, NULL);
-  // xTaskCreate(time_sync_task, "time_sync_task", 4096, NULL, 4, NULL);
+  xTaskCreate(time_sync_task, "time_sync_task", 4096, NULL, 4, NULL);
 }
