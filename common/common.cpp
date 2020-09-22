@@ -177,6 +177,12 @@ bool get_file_size(uint16_t file_index, uint32_t *size) {
   return true;
 }
 
+uint64_t get_time(void) {
+  struct timeval tv_now;
+  gettimeofday(&tv_now, NULL);
+  return (uint64_t) tv_now.tv_sec * 1000000L + (uint64_t) tv_now.tv_usec;
+}
+
 esp_err_t espnow_add_peer(const uint8_t *peer_addr) {
   esp_now_peer_info_t peer;
   memset(&peer, 0, sizeof(esp_now_peer_info_t));

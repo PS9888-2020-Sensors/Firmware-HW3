@@ -166,9 +166,7 @@ void sample_task(void *pvParameter) {
       float val = sensor_read();
       *(((float *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
       if (sample_count[cur_buf] == 0) {
-        struct timeval tv_now;
-        gettimeofday(&tv_now, NULL);
-        sample_start_time[cur_buf] = (uint64_t) tv_now.tv_sec * 1000000L + (uint64_t) tv_now.tv_usec;
+        sample_start_time[cur_buf] = get_time();
       }
 
       sample_count[cur_buf] ++;
