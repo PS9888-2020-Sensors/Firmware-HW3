@@ -26,6 +26,8 @@ int get_btn_user(void);
 bool conv_strtoul(char *str, uint16_t *num);
 bool get_file_size(uint16_t file_index, uint32_t *size);
 
+uint64_t get_time(void);
+
 esp_err_t espnow_add_peer(const uint8_t *peer_addr);
 // two separate functions for setting addr/sending data so that
 // caller of sendEspNow dosent need to know the address

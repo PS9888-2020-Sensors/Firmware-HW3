@@ -9,6 +9,7 @@
 #include "esp_log.h"
 
 #include "mtftp_server.hpp"
+#include "sample_task.h"
 
 #include "mtftp_task.h"
 #include "common.h"
@@ -72,8 +73,19 @@ static uint16_t buildFileList(file_list_entry_t entries[]) {
 
     if (!conv_strtoul(dir->d_name, &(entries[count].index))) continue;
 
+    if (entries[count].index == sample_file_index) {
+      xSemaphoreTake(sample_file_semaph, portMAX_DELAY);
+    }
+
     if (!get_file_size(entries[count].index, &(entries[count].size))) {
+      if (entries[count].index == sample_file_index) {
+        xSemaphoreGive(sample_file_semaph);
+      }
       continue;
+    }
+
+    if (entries[count].index == sample_file_index) {
+      xSemaphoreGive(sample_file_semaph);
     }
 
     ESP_LOGD(TAG, "filename=%s size=%d", dir->d_name, entries[count].size);
@@ -136,6 +148,14 @@ static bool readFile(uint16_t file_index, uint32_t file_offset, uint8_t *data, u
     if (local_state.file_index != 0) {
       ESP_LOGI(TAG, "fclose %d", local_state.file_index);
       fclose(local_state.fp);
+
+      if (local_state.file_index == sample_file_index) {
+        xSemaphoreGive(sample_file_semaph);
+      }
+    }
+
+    if (local_state.file_index == sample_file_index) {
+      xSemaphoreTake(sample_file_semaph, portMAX_DELAY);
     }
 
     char fname[LEN_MAX_FNAME];
@@ -217,6 +237,10 @@ static void endPeered(void) {
   if (local_state.file_index != 0) {
     ESP_LOGI(TAG, "fclose %d", local_state.file_index);
     fclose(local_state.fp);
+
+    if (local_state.file_index == sample_file_index) {
+      xSemaphoreGive(sample_file_semaph);
+    }
 
     local_state.file_index = 0;
   }

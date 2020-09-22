@@ -18,6 +18,10 @@
 #include "common.h"
 #include "board.h"
 
+uint16_t sample_file_index;
+SemaphoreHandle_t sample_file_semaph;
+SemaphoreHandle_t time_acquired_semaph;
+
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
 
@@ -67,15 +71,15 @@ static void sample_write_task(void *pvParameter) {
     sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(float), MALLOC_CAP_SPIRAM);
   }
 
-  uint16_t file_index = get_largest_file();
+  sample_file_index = get_largest_file();
 
-  if (file_index == 0) {
-    file_index = 1;
+  if (sample_file_index == 0) {
+    sample_file_index = 1;
   } else {
-    file_index ++;
+    sample_file_index ++;
   }
 
-  ESP_LOGI(TAG, "samples will be written to file_index=%d", file_index);
+  ESP_LOGI(TAG, "samples will be written to file_index=%d", sample_file_index);
 
   char * file_buffer = (char *) malloc(CONFIG_WRITE_BUF_SIZE);
 
@@ -93,8 +97,16 @@ static void sample_write_task(void *pvParameter) {
     xTaskNotifyWait(0, 0, &buf_index, portMAX_DELAY);
     ESP_LOGI(TAG, "writing buffer %d to file", buf_index);
 
+    if (xSemaphoreTake(sample_file_semaph, 0) == pdFALSE) {
+      ESP_LOGI(TAG, "waiting to acquire semaphore");
+      // TODO: make this timeout, if fail to acquire then write to
+      // sample_file_index ++
+      xSemaphoreTake(sample_file_semaph, portMAX_DELAY);
+      ESP_LOGI(TAG, "taken semaphore");
+    }
+
     char fname[LEN_MAX_FNAME];
-    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, sample_file_index);
 
     FILE *fp = fopen(fname, "a");
     if (fp == NULL) {
@@ -116,12 +128,18 @@ static void sample_write_task(void *pvParameter) {
 
     fclose(fp);
     ESP_LOGI(TAG, "write done");
+    xSemaphoreGive(sample_file_semaph);
 
     sample_count[buf_index] = 0;
   }
 }
 
 void sample_task(void *pvParameter) {
+  sample_file_semaph = xSemaphoreCreateBinary();
+  // initialise to 1
+  xSemaphoreGive(sample_file_semaph);
+  time_acquired_semaph = xSemaphoreCreateBinary();
+
   sample_task_handle = xTaskGetCurrentTaskHandle();
   xTaskCreate(sample_write_task, "sample_write_task", 4096, NULL, 5, &sample_write_task_handle);
 
@@ -138,6 +156,9 @@ void sample_task(void *pvParameter) {
   REG_SET_BIT(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA_M);
   ESP_ERROR_CHECK(ulp_set_wakeup_period(0, CONFIG_SAMPLE_PERIOD));
 
+  ESP_LOGI(TAG, "waiting for time sync");
+  xSemaphoreTake(time_acquired_semaph, portMAX_DELAY);
+  ESP_LOGI(TAG, "starting sampling");
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   sensor_init();
@@ -150,9 +171,7 @@ void sample_task(void *pvParameter) {
       float val = sensor_read();
       *(((float *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
       if (sample_count[cur_buf] == 0) {
-        struct timeval tv_now;
-        gettimeofday(&tv_now, NULL);
-        sample_start_time[cur_buf] = (uint64_t) tv_now.tv_sec * 1000000L + (uint64_t) tv_now.tv_usec;
+        sample_start_time[cur_buf] = get_time();
       }
 
       sample_count[cur_buf] ++;
