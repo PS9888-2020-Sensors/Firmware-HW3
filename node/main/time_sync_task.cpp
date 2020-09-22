@@ -123,7 +123,10 @@ void time_sync_task(void *pvParameter) {
           // read up to the pattern
           br = uart_read_bytes(UART_NUM, (uint8_t *) buf_read, len, 0);
 
-          ESP_LOGI(TAG, "pat detected %s", buf_read);
+          char * buf_print = buf_read;
+          // drop newline if exists
+          if (*buf_print == '\n') buf_print ++;
+          ESP_LOGD(TAG, "rx from gps: %s", buf_print);
 
           if (br > 0) {
             // leading \n because UART splits on \r
