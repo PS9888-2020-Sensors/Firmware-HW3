@@ -24,28 +24,11 @@ static int64_t next_time_arrival = -10000000;
 // absolute time, valid on next pps pulse
 static struct timeval next_time;
 
-static QueueHandle_t queue_handle;
 static void IRAM_ATTR pps_isr_handler(void *arg) {
   // sanity check that the value of next_time was set within the last second
   if ((esp_timer_get_time() - next_time_arrival) > 950000) return;
 
-  uint64_t time = get_time();
-  xQueueSendFromISR(queue_handle, &time, 0);
-
   settimeofday(&next_time, NULL);
-}
-
-static void logging_task(void *pvParameter) {
-  const char *TAG = "logging_task";
-  uint64_t time;
-
-  queue_handle = xQueueCreate(4, sizeof(uint64_t));
-
-  while(1) {
-    if (xQueueReceive(queue_handle, &time, 1050 / portTICK_PERIOD_MS) == pdTRUE) {
-      ESP_LOGI(TAG, "pulse: %llu", time);
-    }
-  }
 }
 
 static void pps_init(void) {
@@ -56,7 +39,6 @@ static void pps_init(void) {
 
   ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));
   ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_GPS_PPS, pps_isr_handler, NULL));
-  xTaskCreate(logging_task, "logging_task", 2048, NULL, 3, NULL);
 }
 
 void time_sync_task(void *pvParameter) {
