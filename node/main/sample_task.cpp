@@ -133,6 +133,8 @@ static void sample_write_task(void *pvParameter) {
 
     if (shutdown) {
       ESP_LOGI(TAG, "sampling shutdown");
+      Event_t evt = EVT_SHUTDOWN_WRITE_DONE;
+      xQueueSend(evt_queue, &evt, 0);
       vTaskSuspend(NULL);
     }
 
@@ -169,6 +171,9 @@ void sample_task(void *pvParameter) {
 #else
   ESP_LOGW(TAG, "skipping wait for time sync because CONFIG_START_WITHOUT_TIME_SYNC is set");
 #endif
+
+  Event_t evt = EVT_TIME_SYNCED;
+  xQueueSend(evt_queue, &evt, 0);
 
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
