@@ -27,4 +27,8 @@ config START_WITHOUT_TIME_SYNC
     bool "Start sampling without waiting for time sync"
     help
         If set, sampling will start without waiting for a time sync
+config BTN_SHUTDOWN_TIME
+    int "Time that btn has to be pressed to shutdown node"
+    default 3000000
+    range 500000 10000000
 endmenu

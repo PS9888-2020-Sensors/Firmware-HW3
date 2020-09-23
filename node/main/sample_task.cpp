@@ -15,6 +15,7 @@
 #include "sensor.h"
 
 #include "sample_task.h"
+#include "monitor_task.h"
 #include "common.h"
 #include "board.h"
 
@@ -130,6 +131,13 @@ static void sample_write_task(void *pvParameter) {
     ESP_LOGI(TAG, "write done");
     xSemaphoreGive(sample_file_semaph);
 
+    if (shutdown) {
+      ESP_LOGI(TAG, "sampling shutdown");
+      Event_t evt = EVT_SHUTDOWN_WRITE_DONE;
+      xQueueSend(evt_queue, &evt, 0);
+      vTaskSuspend(NULL);
+    }
+
     sample_count[buf_index] = 0;
   }
 }
@@ -164,6 +172,9 @@ void sample_task(void *pvParameter) {
   ESP_LOGW(TAG, "skipping wait for time sync because CONFIG_START_WITHOUT_TIME_SYNC is set");
 #endif
 
+  Event_t evt = EVT_TIME_SYNCED;
+  xQueueSend(evt_queue, &evt, 0);
+
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   sensor_init();
@@ -179,9 +190,13 @@ void sample_task(void *pvParameter) {
         sample_start_time[cur_buf] = get_time();
       }
 
-      if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1)) {
+      if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1) || shutdown) {
         // notify other task to start write
         xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
+
+        if (shutdown) {
+          vTaskSuspend(NULL);
+        }
 
         // start using other buffer
         cur_buf = !cur_buf;
