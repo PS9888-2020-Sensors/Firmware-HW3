@@ -7,6 +7,7 @@
 #include "driver/gpio.h"
 
 #include "board.h"
+#include "sensor.h"
 
 #define BME280_FLOAT_ENABLE
 #include "bme280/bme280.h"
@@ -133,13 +134,12 @@ void sensor_init(void) {
   ESP_LOGI(TAG, "min delay = %dms", bme280_cal_meas_delay(&(dev.settings)));
 }
 
-float sensor_read(void) {
+TYPE_SENSOR_READING sensor_read(void) {
   struct bme280_data comp_data;
   bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
 
   ESP_LOGV(TAG, "bme280: temp=%f pressure=%f humidity=%f",comp_data.temperature, comp_data.pressure, comp_data.humidity);
 
-  // convert the float into a 24 bit int (very crudely)
   return comp_data.pressure;
 }
 

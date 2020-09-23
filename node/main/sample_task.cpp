@@ -68,7 +68,7 @@ static uint16_t get_largest_file(void) {
 static void sample_write_task(void *pvParameter) {
   // initialise buffers (in external PSRAM)
   for(uint8_t i = 0; i < 2; i++) {
-    sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(float), MALLOC_CAP_SPIRAM);
+    sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(TYPE_SENSOR_READING), MALLOC_CAP_SPIRAM);
   }
 
   sample_file_index = get_largest_file();
@@ -120,11 +120,11 @@ static void sample_write_task(void *pvParameter) {
     }
 
     chunk_header.timestamp = sample_start_time[buf_index];
-    chunk_header.sample_size = sizeof(float);
+    chunk_header.sample_size = sizeof(TYPE_SENSOR_READING);
     chunk_header.sample_count = sample_count[buf_index] + 1;
 
     fwrite(&chunk_header, sizeof(chunk_header), 1, fp);
-    fwrite(sample_buffers[buf_index], sizeof(float), sample_count[buf_index] + 1, fp);
+    fwrite(sample_buffers[buf_index], sizeof(TYPE_SENSOR_READING), sample_count[buf_index] + 1, fp);
 
     fclose(fp);
     ESP_LOGI(TAG, "write done");
@@ -168,8 +168,8 @@ void sample_task(void *pvParameter) {
     xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
 
     if (started_sampling) {
-      float val = sensor_read();
-      *(((float *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
+      TYPE_SENSOR_READING val = sensor_read();
+      *(((TYPE_SENSOR_READING *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
       if (sample_count[cur_buf] == 0) {
         sample_start_time[cur_buf] = get_time();
       }
