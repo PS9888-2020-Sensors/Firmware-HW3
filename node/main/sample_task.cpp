@@ -179,14 +179,14 @@ void sample_task(void *pvParameter) {
         sample_start_time[cur_buf] = get_time();
       }
 
-      sample_count[cur_buf] ++;
-
       if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1)) {
         // notify other task to start write
         xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
 
         // start using other buffer
         cur_buf = !cur_buf;
+      } else {
+        sample_count[cur_buf] ++;
       }
     }
 
