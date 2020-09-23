@@ -156,9 +156,14 @@ void sample_task(void *pvParameter) {
   REG_SET_BIT(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA_M);
   ESP_ERROR_CHECK(ulp_set_wakeup_period(0, CONFIG_SAMPLE_PERIOD));
 
+#ifndef CONFIG_START_WITHOUT_TIME_SYNC
   ESP_LOGI(TAG, "waiting for time sync");
   xSemaphoreTake(time_acquired_semaph, portMAX_DELAY);
   ESP_LOGI(TAG, "starting sampling");
+#else
+  ESP_LOGW(TAG, "skipping wait for time sync because CONFIG_START_WITHOUT_TIME_SYNC is set");
+#endif
+
   ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   sensor_init();

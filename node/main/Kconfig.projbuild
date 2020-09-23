@@ -23,4 +23,8 @@ config SAMPLE_BUFFER_NUM
     range 1 32768
     help
     Two buffers will be allocated to each hold SAMPLE_BUFFER_NUM amount of samples
+config START_WITHOUT_TIME_SYNC
+    bool "Start sampling without waiting for time sync"
+    help
+        If set, sampling will start without waiting for a time sync
 endmenu
