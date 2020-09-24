@@ -11,6 +11,7 @@
 #include "mtftp_client.hpp"
 
 #include "mtftp_task.h"
+#include "write_task.h"
 #include "common.h"
 
 // interval in microseconds
@@ -92,49 +93,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     return true;
   }
 
-  if (local_state.file_index != file_index) {
-    if (local_state.file_index != 0) {
-      ESP_LOGI(TAG, "fclose %d", local_state.file_index);
-      fclose(local_state.fp);
-    }
-
-    char fname[LEN_MAX_FNAME];
-
-    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
-
-    // `r+` is used here because `a` does not allow writing to the middle of the file
-    // but `r+` fails if the file does not exist, so open in `w` (create new) if so
-    local_state.fp = fopen(fname, "r+");
-    if (local_state.fp == NULL) {
-      local_state.fp = fopen(fname, "w");
-      if (local_state.fp == NULL) {
-        ESP_LOGE(TAG, "fopen %s failed", fname);
-        return false;
-      }
-    }
-
-    if (setvbuf(local_state.fp, NULL, _IOFBF, CONFIG_WRITE_BUF_SIZE) != 0) {
-      ESP_LOGE(TAG, "setvbuf failed");
-      return false;
-    }
-
-    ESP_LOGI(TAG, "fopen %d", file_index);
-
-    local_state.file_index = file_index;
-  }
-
-  if (fseek(local_state.fp, file_offset, SEEK_SET) != 0) {
-    ESP_LOGE(TAG, "fseek of %d to %d failed", file_index, file_offset);
-    return false;
-  }
-
-  size_t bw = fwrite(data, 1, btw, local_state.fp);
-  if (bw != btw) {
-    ESP_LOGE(TAG, "write failed, only %d bytes written (!= %d)", bw, btw);
-    return false;
-  }
-
-  return true;
+  return write_sd(file_index, file_offset, data, btw);
 }
 
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {
@@ -272,6 +231,8 @@ static void led_task(void *pvParameter) {
 
 void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
+
+  xTaskCreate(write_task, "write_task", 2048, NULL, 4, NULL);
 
   memset(&local_state, 0, sizeof(local_state));
   local_state.file_entries = xQueueCreate(CONFIG_LEN_FILE_LIST, sizeof(file_list_entry_t));
