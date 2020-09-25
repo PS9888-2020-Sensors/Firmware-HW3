@@ -74,7 +74,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
         if (local_size == 0) {
           entry->size = 0;
         } else {
-          entry->size = local_size + 1;
+          entry->size = local_size;
         }
       } else {
         entry->size = 0;
