@@ -109,9 +109,7 @@ void write_task(void *pvParameter) {
   size_t size;
 
   while(1) {
-    if (xSemaphoreTake(start_write, 500 / portTICK_PERIOD_MS) == pdFALSE) {
-      ESP_LOGI(TAG, "writing by timeout");
-    }
+    xSemaphoreTake(start_write, 500 / portTICK_PERIOD_MS);
 
     uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 0, CONFIG_WRITE_BUF_SIZE);
 
@@ -140,6 +138,7 @@ void write_task(void *pvParameter) {
         memcpy(write_buf + write_buf_count, buf, size);
         write_buf_count += size;
         vRingbufferReturnItem(write_buffer, buf);
+        base_file_offset += size;
       }
     }
 
