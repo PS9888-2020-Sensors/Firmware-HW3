@@ -109,7 +109,7 @@ void write_task(void *pvParameter) {
   size_t size;
 
   while(1) {
-    xSemaphoreTake(start_write, 500 / portTICK_PERIOD_MS);
+    xSemaphoreTake(start_write, 100 / portTICK_PERIOD_MS);
 
     uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 0, CONFIG_WRITE_BUF_SIZE);
 
