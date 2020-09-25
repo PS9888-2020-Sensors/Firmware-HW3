@@ -1,4 +1,5 @@
 #include <sys/unistd.h>
+#include "string.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
@@ -9,6 +10,7 @@
 #include "common.h"
 #include "write_task.h"
 
+SemaphoreHandle_t start_write;
 SemaphoreHandle_t buffer_empty;
 
 // used to lock access to write_buffer
@@ -57,24 +59,35 @@ bool write_sd(uint16_t _file_index, uint32_t file_offset, const uint8_t *data, u
 
     ESP_LOGI(TAG, "fopen %d", _file_index);
 
+    if (lseek(fileno(fp), file_offset, SEEK_SET) == -1) {
+      ESP_LOGW(TAG, "failed to seek to %d", file_offset);
+      fclose(fp);
+      return false;
+    }
+
     file_index = _file_index;
     base_file_offset = file_offset;
   }
 
   while(1) {
     xSemaphoreTake(buffer_update, portMAX_DELAY);
-    uint32_t cur_offset = base_file_offset + (CONFIG_WRITE_BUF_SIZE * 2 - xRingbufferGetCurFreeSize(write_buffer));
+    uint32_t buffer_count = CONFIG_WRITE_BUF_SIZE * 2 - xRingbufferGetCurFreeSize(write_buffer);
+    uint32_t cur_offset = base_file_offset + buffer_count;
     if (cur_offset != file_offset) {
       ESP_LOGW(TAG, "offset mismatch: writing to %d but cur is %d", file_offset, cur_offset);
       xSemaphoreGive(buffer_update);
       return false;
     }
 
-    if (xRingbufferSend(write_buffer, data, btw, 20 / portTICK_PERIOD_MS) == pdTRUE) {
-      // if this fails, we have to give up buffer_update for a while
-      // because the buffer is full but write_task isnt able to return data until we
-      // release buffer_update
+    if (xRingbufferSend(write_buffer, data, btw, 0) == pdTRUE) {
+      // if this fails, we have to give up because the buffer cant get cleared
+      // until we release buffer_update
       xSemaphoreGive(buffer_update);
+
+      // if we have more than CONFIG_WRITE_BUF_SIZE, signal to start write
+      if (buffer_count + btw > CONFIG_WRITE_BUF_SIZE) {
+        xSemaphoreGive(start_write);
+      }
       return true;
     }
     xSemaphoreGive(buffer_update);
@@ -84,13 +97,18 @@ bool write_sd(uint16_t _file_index, uint32_t file_offset, const uint8_t *data, u
 void write_task(void *pvParameter) {
   buffer_empty = xSemaphoreCreateBinary();
   buffer_update = xSemaphoreCreateBinary();
+  start_write = xSemaphoreCreateBinary();
   xSemaphoreGive(buffer_update);
   write_buffer = xRingbufferCreate(CONFIG_WRITE_BUF_SIZE * 2, RINGBUF_TYPE_BYTEBUF);
 
   size_t size;
 
   while(1) {
-    uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 500 / portTICK_PERIOD_MS, CONFIG_WRITE_BUF_SIZE);
+    if (xSemaphoreTake(start_write, 500 / portTICK_PERIOD_MS) == pdFALSE) {
+      ESP_LOGI(TAG, "writing by timeout");
+    }
+
+    uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 0, CONFIG_WRITE_BUF_SIZE);
 
     if (buf == NULL) {
       if (file_index == 0) continue;
