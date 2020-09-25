@@ -101,6 +101,11 @@ void write_task(void *pvParameter) {
   xSemaphoreGive(buffer_update);
   write_buffer = xRingbufferCreate(CONFIG_WRITE_BUF_SIZE * 2, RINGBUF_TYPE_BYTEBUF);
 
+  // allocate yet another buffer to actually hold data right before writing to SD because
+  // the ring buffer may not store stuff sequentially
+  char *write_buf = (char *) malloc(CONFIG_WRITE_BUF_SIZE);
+  uint32_t write_buf_count = 0;
+
   size_t size;
 
   while(1) {
@@ -121,11 +126,26 @@ void write_task(void *pvParameter) {
       continue;
     }
 
-    write(fileno(fp), buf, size);
+    memcpy(write_buf, buf, size);
+    write_buf_count = size;
 
     xSemaphoreTake(buffer_update, portMAX_DELAY);
     vRingbufferReturnItem(write_buffer, buf);
     base_file_offset += size;
+    
+    // read more because the ringbuffer may not store sequentially
+    if (size < CONFIG_WRITE_BUF_SIZE) {
+      buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 0, CONFIG_WRITE_BUF_SIZE - write_buf_count);
+      if (buf != NULL) {
+        memcpy(write_buf + write_buf_count, buf, size);
+        write_buf_count += size;
+        vRingbufferReturnItem(write_buffer, buf);
+      }
+    }
+
     xSemaphoreGive(buffer_update);
+
+    ESP_LOGI(TAG, "writing %d bytes", write_buf_count);
+    write(fileno(fp), write_buf, write_buf_count);
   }
 }
