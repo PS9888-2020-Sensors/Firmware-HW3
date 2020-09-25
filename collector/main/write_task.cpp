@@ -59,18 +59,24 @@ bool write_sd(uint16_t _file_index, uint32_t file_offset, const uint8_t *data, u
     base_file_offset = file_offset;
   }
 
-  xSemaphoreTake(buffer_update, portMAX_DELAY);
-  uint32_t cur_offset = base_file_offset + (CONFIG_WRITE_BUF_SIZE * 2 - xRingbufferGetCurFreeSize(write_buffer));
-  if (cur_offset != file_offset) {
-    ESP_LOGW(TAG, "offset mismatch: writing to %d but cur is %d", file_offset, cur_offset);
+  while(1) {
+    xSemaphoreTake(buffer_update, portMAX_DELAY);
+    uint32_t cur_offset = base_file_offset + (CONFIG_WRITE_BUF_SIZE * 2 - xRingbufferGetCurFreeSize(write_buffer));
+    if (cur_offset != file_offset) {
+      ESP_LOGW(TAG, "offset mismatch: writing to %d but cur is %d", file_offset, cur_offset);
+      xSemaphoreGive(buffer_update);
+      return false;
+    }
+
+    if (xRingbufferSend(write_buffer, data, btw, 20 / portTICK_PERIOD_MS) == pdTRUE) {
+      // if this fails, we have to give up buffer_update for a while
+      // because the buffer is full but write_task isnt able to return data until we
+      // release buffer_update
+      xSemaphoreGive(buffer_update);
+      return true;
+    }
     xSemaphoreGive(buffer_update);
-    return false;
   }
-
-  xRingbufferSend(write_buffer, data, btw, portMAX_DELAY);
-  xSemaphoreGive(buffer_update);
-
-  return true;
 }
 
 void write_task(void *pvParameter) {
@@ -82,7 +88,7 @@ void write_task(void *pvParameter) {
   size_t size;
 
   while(1) {
-    uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 100 / portTICK_PERIOD_MS, CONFIG_WRITE_BUF_SIZE);
+    uint8_t *buf = (uint8_t *) xRingbufferReceiveUpTo(write_buffer, &size, 500 / portTICK_PERIOD_MS, CONFIG_WRITE_BUF_SIZE);
 
     if (buf == NULL) {
       if (file_index == 0) continue;
