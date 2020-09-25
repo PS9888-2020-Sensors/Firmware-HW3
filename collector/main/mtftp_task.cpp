@@ -33,9 +33,6 @@ struct {
   int64_t last_report;
   uint32_t bytes_rx;
 
-  uint16_t file_index;
-  FILE *fp;
-
   // stores list of file_list_entry_t
   QueueHandle_t file_entries;
 } local_state;
@@ -123,15 +120,6 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
   ESP_LOGV(TAG, "end");
 }
 
-static void close_fp(void) {
-  if (local_state.file_index != 0) {
-    ESP_LOGI("close_fp", "fclose %d", local_state.file_index);
-    fclose(local_state.fp);
-
-    local_state.file_index = 0;
-  }
-}
-
 static void endPeered(void) {
   const char *TAG = "endPeered";
 
@@ -141,10 +129,11 @@ static void endPeered(void) {
   memset(local_state.peer_addr, 0, 6);
   local_state.state = STATE_FIND_PEER;
 
-  close_fp();
+  wait_for_close();
 }
 
 static void transferEnd(void) {
+  wait_for_close();
   local_state.state = STATE_START_READ;
 }
 
@@ -232,7 +221,7 @@ static void led_task(void *pvParameter) {
 void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
 
-  xTaskCreate(write_task, "write_task", 2048, NULL, 4, NULL);
+  xTaskCreate(write_task, "write_task", 2048, NULL, 5, NULL);
 
   memset(&local_state, 0, sizeof(local_state));
   local_state.file_entries = xQueueCreate(CONFIG_LEN_FILE_LIST, sizeof(file_list_entry_t));

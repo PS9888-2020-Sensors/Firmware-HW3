@@ -21,7 +21,9 @@ uint32_t base_file_offset = 0;
 
 static const char *TAG = "write_task";
 
-static void wait_for_close(void) {
+void wait_for_close(void) {
+  if (file_index == 0) return;
+
   ESP_LOGI(TAG, "waiting for %d to close", file_index);
   if (xRingbufferGetCurFreeSize(write_buffer) > 0) {
     // try take the semphr to clear it
