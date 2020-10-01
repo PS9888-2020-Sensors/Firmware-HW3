@@ -261,7 +261,7 @@ void mtftp_task(void *pvParameter) {
       } else {
         ESP_LOGI(TAG, "no more files queued");
         endPeered();
-        while(1) vTaskDelay(10000);
+        vTaskDelay(3000);
       }
     } else {
       vTaskDelay(100 / portTICK_PERIOD_MS);
