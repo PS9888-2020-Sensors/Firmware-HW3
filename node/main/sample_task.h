@@ -5,7 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-void sample_task(void *pvParameter);
+void sample_write_task(void *pvParameter);
 
 // this is used to protect access to the file with index sample_file_index
 // because mtftp_task and sample_task could both access it at the same time

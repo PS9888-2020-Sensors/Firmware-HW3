@@ -37,7 +37,32 @@ uint64_t sample_start_time[2] = {0};
 uint8_t cur_buf = 0;
 
 static void ulp_isr(void *arg) {
-  xTaskNotify(sample_task_handle, 0, eNoAction);
+  static bool started_sampling = false;
+  if (started_sampling) {
+    TYPE_SENSOR_READING val = sensor_read();
+    *(((TYPE_SENSOR_READING *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
+    if (sample_count[cur_buf] == 0) {
+      sample_start_time[cur_buf] = get_time();
+    }
+
+    if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1) || shutdown) {
+      // notify other task to start write
+      xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
+
+      if (shutdown) {
+        // disable ULP running
+        REG_CLR_BIT(RTC_CNTL_STATE0_REG, RTC_CNTL_ULP_CP_SLP_TIMER_EN);
+      }
+
+      // start using other buffer
+      cur_buf = !cur_buf;
+    } else {
+      sample_count[cur_buf] ++;
+    }
+  }
+
+  started_sampling = true;
+  sensor_start_read();
 }
 
 static uint16_t get_largest_file(void) {
@@ -66,7 +91,7 @@ static uint16_t get_largest_file(void) {
   return largest;
 }
 
-static void sample_write_task(void *pvParameter) {
+void sample_write_task(void *pvParameter) {
   // initialise buffers (in external PSRAM)
   for(uint8_t i = 0; i < 2; i++) {
     sample_buffers[i] = (char *) heap_caps_malloc(CONFIG_SAMPLE_BUFFER_NUM * sizeof(TYPE_SENSOR_READING), MALLOC_CAP_SPIRAM);
@@ -92,6 +117,41 @@ static void sample_write_task(void *pvParameter) {
     uint8_t sample_size;
     uint32_t sample_count;
   } chunk_header;
+
+  sample_file_semaph = xSemaphoreCreateBinary();
+  // initialise to 1
+  xSemaphoreGive(sample_file_semaph);
+  time_acquired_semaph = xSemaphoreCreateBinary();
+
+  sample_write_task_handle = xTaskGetCurrentTaskHandle();
+
+  ESP_ERROR_CHECK(ulp_load_binary(0, bin_start, (bin_end - bin_start) / sizeof(uint32_t)));
+
+  gpio_num_t gpio_num = GPIO_NUM_39;
+
+  ESP_ERROR_CHECK(rtc_gpio_init(gpio_num));
+  ESP_ERROR_CHECK(rtc_gpio_set_direction(gpio_num, RTC_GPIO_MODE_INPUT_ONLY));
+  ESP_ERROR_CHECK(rtc_gpio_hold_en(gpio_num));
+
+  ESP_ERROR_CHECK(rtc_isr_register(&ulp_isr, NULL, RTC_CNTL_ULP_CP_INT_ENA_M));
+  // enable rtc interrupt
+  REG_SET_BIT(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA_M);
+  ESP_ERROR_CHECK(ulp_set_wakeup_period(0, CONFIG_SAMPLE_PERIOD));
+
+  sensor_init();
+
+#ifndef CONFIG_START_WITHOUT_TIME_SYNC
+  ESP_LOGI(TAG, "waiting for time sync");
+  xSemaphoreTake(time_acquired_semaph, portMAX_DELAY);
+  ESP_LOGI(TAG, "starting sampling");
+#else
+  ESP_LOGW(TAG, "skipping wait for time sync because CONFIG_START_WITHOUT_TIME_SYNC is set");
+#endif
+
+  Event_t evt = EVT_TIME_SYNCED;
+  xQueueSend(evt_queue, &evt, 0);
+
+  ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
 
   while(1) {
     uint32_t buf_index;
@@ -139,73 +199,5 @@ static void sample_write_task(void *pvParameter) {
     }
 
     sample_count[buf_index] = 0;
-  }
-}
-
-void sample_task(void *pvParameter) {
-  sample_file_semaph = xSemaphoreCreateBinary();
-  // initialise to 1
-  xSemaphoreGive(sample_file_semaph);
-  time_acquired_semaph = xSemaphoreCreateBinary();
-
-  sample_task_handle = xTaskGetCurrentTaskHandle();
-  xTaskCreate(sample_write_task, "sample_write_task", 4096, NULL, 5, &sample_write_task_handle);
-
-  ESP_ERROR_CHECK(ulp_load_binary(0, bin_start, (bin_end - bin_start) / sizeof(uint32_t)));
-
-  gpio_num_t gpio_num = GPIO_NUM_39;
-
-  ESP_ERROR_CHECK(rtc_gpio_init(gpio_num));
-  ESP_ERROR_CHECK(rtc_gpio_set_direction(gpio_num, RTC_GPIO_MODE_INPUT_ONLY));
-  ESP_ERROR_CHECK(rtc_gpio_hold_en(gpio_num));
-
-  ESP_ERROR_CHECK(rtc_isr_register(&ulp_isr, NULL, RTC_CNTL_ULP_CP_INT_ENA_M));
-  // enable rtc interrupt
-  REG_SET_BIT(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA_M);
-  ESP_ERROR_CHECK(ulp_set_wakeup_period(0, CONFIG_SAMPLE_PERIOD));
-
-#ifndef CONFIG_START_WITHOUT_TIME_SYNC
-  ESP_LOGI(TAG, "waiting for time sync");
-  xSemaphoreTake(time_acquired_semaph, portMAX_DELAY);
-  ESP_LOGI(TAG, "starting sampling");
-#else
-  ESP_LOGW(TAG, "skipping wait for time sync because CONFIG_START_WITHOUT_TIME_SYNC is set");
-#endif
-
-  Event_t evt = EVT_TIME_SYNCED;
-  xQueueSend(evt_queue, &evt, 0);
-
-  ESP_ERROR_CHECK(ulp_run(&ulp_entry - RTC_SLOW_MEM));
-
-  sensor_init();
-
-  bool started_sampling = false;
-  while(1) {
-    xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
-
-    if (started_sampling) {
-      TYPE_SENSOR_READING val = sensor_read();
-      *(((TYPE_SENSOR_READING *) sample_buffers[cur_buf]) + sample_count[cur_buf]) = val;
-      if (sample_count[cur_buf] == 0) {
-        sample_start_time[cur_buf] = get_time();
-      }
-
-      if (sample_count[cur_buf] == (CONFIG_SAMPLE_BUFFER_NUM - 1) || shutdown) {
-        // notify other task to start write
-        xTaskNotify(sample_write_task_handle, cur_buf, eSetValueWithOverwrite);
-
-        if (shutdown) {
-          vTaskSuspend(NULL);
-        }
-
-        // start using other buffer
-        cur_buf = !cur_buf;
-      } else {
-        sample_count[cur_buf] ++;
-      }
-    }
-
-    started_sampling = true;
-    sensor_start_read();
   }
 }
