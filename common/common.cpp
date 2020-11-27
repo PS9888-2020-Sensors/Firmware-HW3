@@ -152,11 +152,8 @@ bool conv_strtoul(char *str, uint16_t *num) {
   return true;
 }
 
-bool get_file_size(uint16_t file_index, uint32_t *size) {
+bool get_file_size(char *fname, uint32_t *size) {
   const char *TAG = "get_file_size";
-
-  char fname[LEN_MAX_FNAME];
-  snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
 
   FILE *fp = fopen(fname, "r");
 
@@ -172,9 +169,27 @@ bool get_file_size(uint16_t file_index, uint32_t *size) {
   *size = ftello(fp);
   fclose(fp);
 
-  ESP_LOGI(TAG, "file_index=%d has size=%d", file_index, *size);
+  ESP_LOGI(TAG, "file=%s has size=%d", fname, *size);
 
   return true;
+}
+
+bool get_file_size(uint16_t file_index, uint32_t *size) {
+  char fname[LEN_MAX_FNAME];
+  snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, file_index);
+
+  return get_file_size(fname, size);
+}
+
+bool get_file_size(uint8_t addr[], uint16_t file_index, uint32_t *size) {
+  char fname[LEN_MAX_FNAME];
+  get_addr_id_path(addr, file_index, fname);
+
+  return get_file_size(fname, size);
+}
+
+void get_addr_id_path(uint8_t addr[], uint16_t file_index, char *out) {
+  snprintf(out, LEN_MAX_FNAME, "%s/%02X%02X%02X%02X%02X%02X-%d", SD_MOUNT_POINT, ARG_MAC(addr), file_index);
 }
 
 uint64_t get_time(void) {

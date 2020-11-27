@@ -63,7 +63,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
 
       uint32_t local_size;
       // if file exists, save the entry only if local_size < remote size
-      if (get_file_size(entry->index, &local_size)) {
+      if (get_file_size(local_state.peer_addr, entry->index, &local_size)) {
         if (local_size > entry->size) {
           ESP_LOGW(TAG, "local size (%d) of file_index=%d more than remote size (%d)", local_size, entry->index, entry->size);
           continue;
@@ -90,7 +90,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     return true;
   }
 
-  return write_sd(file_index, file_offset, data, btw);
+  return write_sd(local_state.peer_addr, file_index, file_offset, data, btw);
 }
 
 static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len) {

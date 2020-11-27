@@ -24,7 +24,11 @@ void set_led(bool on);
 int get_btn_user(void);
 
 bool conv_strtoul(char *str, uint16_t *num);
+bool get_file_size(uint8_t addr[], uint16_t file_index, uint32_t *size);
 bool get_file_size(uint16_t file_index, uint32_t *size);
+bool get_file_size(char *fname, uint32_t *size);
+
+void get_addr_id_path(uint8_t addr[], uint16_t index, char *out);
 
 uint64_t get_time(void);
 
@@ -46,8 +50,8 @@ typedef struct __attribute__((__packed__)) {
   uint32_t size;
 } file_list_entry_t;
 
-// len("/sdcard/") + str(file_index) + null
-// 8 + max 5 + 1
-static const uint8_t LEN_MAX_FNAME = 14;
+// len("/sdcard/") + 12 hex chars for MAC + "-" str(file_index) + null
+// 8 + 12 + 1 + max 5 + 1
+static const uint8_t LEN_MAX_FNAME = 30;
 
 #endif

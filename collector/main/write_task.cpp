@@ -18,6 +18,7 @@ SemaphoreHandle_t buffer_update;
 RingbufHandle_t write_buffer;
 
 FILE *fp;
+uint8_t peer_addr[6];
 uint16_t file_index = 0;
 uint32_t base_file_offset = 0;
 
@@ -37,14 +38,18 @@ void wait_for_close(void) {
   ESP_LOGI(TAG, "closed");
 }
 
-bool write_sd(uint16_t _file_index, uint32_t file_offset, const uint8_t *data, uint16_t btw) {
-  if (file_index != _file_index) {
+bool write_sd(uint8_t addr[], uint16_t _file_index, uint32_t file_offset, const uint8_t *data, uint16_t btw) {
+  if (file_index != _file_index || memcmp(addr, peer_addr, 6) != 0) {
+    if (memcmp(addr, peer_addr, 6) != 0) {
+      memcpy(peer_addr, addr, 6);
+    }
+
     if (file_index != 0) {
       wait_for_close();
     }
 
     char fname[LEN_MAX_FNAME];
-    snprintf(fname, LEN_MAX_FNAME, "%s/%d", SD_MOUNT_POINT, _file_index);
+    get_addr_id_path(addr, _file_index, fname);
 
     // `r+` is used here because `a` does not allow writing to the middle of the file
     // but `r+` fails if the file does not exist, so open in `w` (create new) if so
