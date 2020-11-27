@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "ESP-IDF",
+            "compilerPath": "${default}",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "includePath": [
+                "/opt/esp-4.2/components/**",
+                "${workspaceFolder}/**"
+            ],
+            "browse": {
+                "path": [
+                    "/opt/esp-4.2/components",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
+        }
+    ],
+    "version": 4
+}
