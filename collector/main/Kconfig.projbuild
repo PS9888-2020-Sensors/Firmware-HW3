@@ -11,4 +11,8 @@ menu "Collector Configuration"
     range 1024 32768
     help
     File write buffer size
+  config ALWAYS_DOWNLOAD
+    bool "Always redownload data even if already downloaded"
+    help
+        Probably only useful when testing throughput
 endmenu

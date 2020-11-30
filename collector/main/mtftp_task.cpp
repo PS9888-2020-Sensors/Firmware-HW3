@@ -60,24 +60,30 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     for (uint16_t i = 0; (i + 1) * sizeof(file_list_entry_t) <= btw; i++) {
       entry = (file_list_entry_t *) (data + (i * sizeof(file_list_entry_t)));
 
-      uint32_t local_size;
-      // if file exists, save the entry only if local_size < remote size
-      if (get_file_size(local_state.peer_addr, entry->index, &local_size)) {
-        if (local_size > entry->size) {
-          ESP_LOGW(TAG, "local size (%d) of file_index=%d more than remote size (%d)", local_size, entry->index, entry->size);
-          continue;
-        } else if (local_size == entry->size) {
-          continue;
-        }
+      #ifndef CONFIG_ALWAYS_DOWNLOAD
+        uint32_t local_size;
+        // if file exists, save the entry only if local_size < remote size
+        if (get_file_size(local_state.peer_addr, entry->index, &local_size)) {
+          if (local_size > entry->size) {
+            ESP_LOGW(TAG, "local size (%d) of file_index=%d more than remote size (%d)", local_size, entry->index, entry->size);
+            continue;
+          } else if (local_size == entry->size) {
+            continue;
+          }
 
-        if (local_size == 0) {
-          entry->size = 0;
+          if (local_size == 0) {
+            entry->size = 0;
+          } else {
+            entry->size = local_size;
+          }
         } else {
-          entry->size = local_size;
+          entry->size = 0;
         }
-      } else {
+      #else
+        ESP_LOGI(TAG, "queuing read because ALWAYS_DOWNLOAD is set");
         entry->size = 0;
-      }
+      #endif
+
       if (xQueueSend(local_state.file_entries, entry, 0) == pdTRUE) {
         ESP_LOGI(TAG, "queuing read of file_index=%d at offset=%d", entry->index, entry->size);
       } else {
@@ -257,7 +263,7 @@ void mtftp_task(void *pvParameter) {
       } else {
         ESP_LOGI(TAG, "no more files queued");
         endPeered();
-        vTaskDelay(3000);
+        vTaskDelay(100);
       }
     } else {
       vTaskDelay(100 / portTICK_PERIOD_MS);
