@@ -87,7 +87,14 @@ void sendEspNow(const uint8_t *data, uint8_t len) {
   ESP_ERROR_CHECK(esp_now_send((const uint8_t *) espnow_tx_addr, data, len));
 }
 
+uint16_t packet_send_count = 0;
+uint16_t packet_fail_count = 0;
 static void onSendEspNowCb(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  if (status == ESP_OK) {
+    packet_send_count ++;
+  } else {
+    packet_fail_count ++;
+  }
   xSemaphoreGive(can_tx);
 }
 

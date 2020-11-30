@@ -14,8 +14,8 @@
 #include "write_task.h"
 #include "common.h"
 
-// interval in microseconds
-static const uint32_t REPORT_INTERVAL = 1000000;
+// interval in ms
+static const uint32_t REPORT_INTERVAL = 1000;
 
 static MtftpClient client;
 
@@ -30,7 +30,6 @@ struct {
   uint8_t peer_addr[6];
   enum state state;
 
-  int64_t last_report;
   uint32_t bytes_rx;
 
   // stores list of file_list_entry_t
@@ -172,15 +171,12 @@ static void rate_logging_task(void *pvParameter) {
   const char *TAG = "transfer";
 
   while(1) {
-    int64_t time_diff = esp_timer_get_time() - local_state.last_report;
-    if (local_state.bytes_rx > 0 && time_diff > REPORT_INTERVAL) {
-      ESP_LOGI(TAG, "%d bytes at %.2f kbyte/s", local_state.bytes_rx, (double) local_state.bytes_rx / 1024 / (time_diff / 1000000));
-
-      local_state.last_report = esp_timer_get_time();
+    if (local_state.bytes_rx > 0) {
+      ESP_LOGI(TAG, "%d bytes at %d kbyte/s (%d packets lost)", local_state.bytes_rx, local_state.bytes_rx / 1024, packet_fail_count);
       local_state.bytes_rx = 0;
+      packet_fail_count = 0;
     }
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(REPORT_INTERVAL / portTICK_PERIOD_MS);
   }
 }
 

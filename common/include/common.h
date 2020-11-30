@@ -54,4 +54,7 @@ typedef struct __attribute__((__packed__)) {
 // 8 + 12 + 1 + max 5 + 1
 static const uint8_t LEN_MAX_FNAME = 30;
 
+extern uint16_t packet_send_count;
+extern uint16_t packet_fail_count;
+
 #endif

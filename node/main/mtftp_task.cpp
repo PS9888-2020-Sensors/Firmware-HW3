@@ -17,6 +17,9 @@
 
 #include "sdkconfig.h"
 
+// interval in ms
+static const uint32_t REPORT_INTERVAL = 1000;
+
 static MtftpServer server;
 
 enum state {
@@ -252,12 +255,27 @@ static void endPeered(void) {
   }
 }
 
+static void rate_logging_task(void *pvParameter) {
+  const char *TAG = "transfer";
+
+  while(1) {
+    if (packet_send_count > 0 || packet_fail_count > 0) {
+      ESP_LOGI(TAG, "%d packets (~%d kbyte) sent, %d lost", packet_send_count, packet_send_count * 247 / 1024, packet_fail_count);
+      packet_send_count = 0;
+      packet_fail_count = 0;
+    }
+    vTaskDelay(REPORT_INTERVAL / portTICK_PERIOD_MS);
+  }
+}
+
 void mtftp_task(void *pvParameter) {
   const char *TAG = "mtftp_task";
   memset(&local_state, 0, sizeof(local_state));
 
   setEspNowTxAddr(local_state.peer_addr);
   esp_now_register_recv_cb(onRecvEspNowCb);
+
+  xTaskCreate(rate_logging_task, "rate_logging_task", 2048, NULL, 3, NULL);
 
   server.init(&readFile, &sendEspNow);
   server.setOnTimeoutCb(&endPeered);
