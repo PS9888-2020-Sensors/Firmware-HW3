@@ -149,7 +149,6 @@ void write_task(void *pvParameter) {
 
     xSemaphoreGive(buffer_update);
 
-    ESP_LOGI(TAG, "writing %d bytes", write_buf_count);
     write(fileno(fp), write_buf, write_buf_count);
   }
 }
