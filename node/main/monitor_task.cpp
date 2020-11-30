@@ -20,6 +20,7 @@ uint8_t blink_index = 0;
 
 void monitor_task(void *pvParameter) {
   uint64_t btn_press_time = 0;
+  bool has_time_sync = false;
 
   while(1) {
     if (get_btn_user() == 0) {
@@ -38,10 +39,15 @@ void monitor_task(void *pvParameter) {
     if (xQueueReceive(evt_queue, &evt, 50 / portTICK_PERIOD_MS) == pdTRUE) {
       if (evt == EVT_TIME_SYNCED) {
         blink_index = 1;
+        has_time_sync = true;
       } else if (evt == EVT_COMMS_START) {
         blink_index = 2;
       } else if (evt == EVT_COMMS_END) {
-        blink_index = 1;
+        if (has_time_sync) {
+          blink_index = 1;
+        } else {
+          blink_index = 0;
+        }
       } else if (evt == EVT_SHUTDOWN_WRITE_DONE) {
         blink_index = 3;
       }
