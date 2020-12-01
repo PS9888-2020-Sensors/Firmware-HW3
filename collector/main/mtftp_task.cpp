@@ -279,6 +279,7 @@ void mtftp_task(void *pvParameter) {
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {
       if (!startPeered()) {
+        vTaskDelay(pdMS_TO_TICKS(500));
         esp_now_send(MAC_BROADCAST, SYNC_PACKET, LEN_SYNC_PACKET);
 
         ESP_LOGI(TAG, " ===== broadcasting sync =====");
