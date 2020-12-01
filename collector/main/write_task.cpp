@@ -34,6 +34,10 @@ void wait_for_close(void) {
     xSemaphoreTake(buffer_empty, 0);
   }
 
+  // start write to clear buffer
+  xSemaphoreGive(start_write);
+  // start another write to trigger file close after buffer_empty
+  xSemaphoreGive(start_write);
   xSemaphoreTake(buffer_empty, portMAX_DELAY);
   ESP_LOGI(TAG, "closed");
 }
@@ -102,7 +106,7 @@ bool write_sd(uint8_t addr[], uint16_t _file_index, uint32_t file_offset, const 
 void write_task(void *pvParameter) {
   buffer_empty = xSemaphoreCreateBinary();
   buffer_update = xSemaphoreCreateBinary();
-  start_write = xSemaphoreCreateBinary();
+  start_write = xSemaphoreCreateCounting(2, 0);
   xSemaphoreGive(buffer_update);
   write_buffer = xRingbufferCreate(CONFIG_WRITE_BUF_SIZE * 2, RINGBUF_TYPE_BYTEBUF);
 
