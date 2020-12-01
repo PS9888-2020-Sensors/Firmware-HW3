@@ -203,7 +203,9 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
     if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
       ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
 
-      espnow_add_peer(mac_addr);
+      if (memcmp(mac_addr, local_state.peer_addr, 6) != 0) {
+        espnow_add_peer(mac_addr);
+      }
 
       // send back the same SYNC packet to the collector as ACK
       memcpy(local_state.peer_addr, mac_addr, 6);

@@ -5,6 +5,12 @@ menu "Collector Configuration"
     range 1 16
     help
     Maximum number of files to transfer in one window
+  config LEN_PEER_QUEUE
+    int "Maximum peer queue length"
+    default 8
+    range 1 16
+    help
+    Maximum number of queue containing peers who respond to the sync packet
   config WRITE_BUF_SIZE
     int "File Write Buffer Size"
     default 8192

@@ -34,6 +34,8 @@ struct {
 
   // stores list of file_list_entry_t
   QueueHandle_t file_entries;
+  // stores MAC addresses of peers that respond
+  QueueHandle_t peer_queue;
 } local_state;
 
 const uint8_t MAC_BROADCAST[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
@@ -102,29 +104,55 @@ static void onRecvEspNowCb(const uint8_t *mac_addr, const uint8_t *data, int len
   const char *TAG = "onRecvEspNowCb";
   ESP_LOGV(TAG, "received packet from " FORMAT_MAC ", len=%d, data[0]=%02x", ARG_MAC(mac_addr), len, (unsigned int) data[0]);
 
-  if (local_state.state == STATE_FIND_PEER) {
-    if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
-      ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
-
-      espnow_add_peer(mac_addr);
-      memcpy(local_state.peer_addr, mac_addr, 6);
-
-      local_state.state = STATE_LOAD_LIST;
-      client.beginRead(0, 0, CONFIG_WINDOW_SIZE);
-    } else {
-      ESP_LOGW(TAG, "received non sync packet");
-    }
-  } else if (local_state.state == STATE_LOAD_LIST || local_state.state == STATE_ACTIVE) {
+  if (len == LEN_SYNC_PACKET && memcmp(data, SYNC_PACKET, LEN_SYNC_PACKET) == 0) {
     if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
-      client.onPacketRecv(data, (uint16_t) len);
-    } else {
-      ESP_LOGD(TAG, "received packet from non peer");
+      // already communicating with peer, ignore sync
+      // side effect of sending another sync packet to a node to reactivate it
+      return;
+    }
+
+    ESP_LOGI(TAG, "sync packet received from " FORMAT_MAC, ARG_MAC(mac_addr));
+
+    if (xQueueSend(local_state.peer_queue, mac_addr, 0) == pdFALSE) {
+      ESP_LOGW(TAG, "peer_queue full. Perhaps increase CONFIG_LEN_PEER_QUEUE?");
+    }
+  } else {
+    if (local_state.state == STATE_LOAD_LIST || local_state.state == STATE_ACTIVE) {
+      if (memcmp(mac_addr, local_state.peer_addr, 6) == 0) {
+        client.onPacketRecv(data, (uint16_t) len);
+      } else {
+        ESP_LOGD(TAG, "received packet from non peer");
+      }
     }
   }
-
-  ESP_LOGV(TAG, "end");
 }
 
+// starts communication with the head of local_state.peer_queue if exists
+// returns true if communication with a peer has been started, or false otherwise
+static bool startPeered(void) {
+  const char *TAG = "startPeered";
+  uint8_t mac_addr[6];
+
+  if (xQueueReceive(local_state.peer_queue, mac_addr, 0) == pdFALSE) {
+    return false;
+  }
+
+  espnow_add_peer(mac_addr);
+  memcpy(local_state.peer_addr, mac_addr, 6);
+
+  // send another sync packet to the node to try and reactivate it
+  // because if we communicate with another node first, subsequent nodes
+  // would have timed out by the time we communicate with it
+  esp_now_send(mac_addr, SYNC_PACKET, LEN_SYNC_PACKET);
+
+  local_state.state = STATE_LOAD_LIST;
+  client.beginRead(0, 0, CONFIG_WINDOW_SIZE);
+
+  ESP_LOGI(TAG, "starting communication with " FORMAT_MAC, ARG_MAC(mac_addr));
+  return true;
+}
+
+// end communication with a peer, either upon timeout or no more file entries
 static void endPeered(void) {
   const char *TAG = "endPeered";
 
@@ -227,6 +255,7 @@ void mtftp_task(void *pvParameter) {
 
   memset(&local_state, 0, sizeof(local_state));
   local_state.file_entries = xQueueCreate(CONFIG_LEN_FILE_LIST, sizeof(file_list_entry_t));
+  local_state.peer_queue = xQueueCreate(CONFIG_LEN_PEER_QUEUE, 6);
 
   assert(local_state.file_entries != NULL);
 
@@ -249,10 +278,12 @@ void mtftp_task(void *pvParameter) {
 
   while(1) {
     if (local_state.state == STATE_FIND_PEER) {
-      esp_now_send(MAC_BROADCAST, SYNC_PACKET, LEN_SYNC_PACKET);
+      if (!startPeered()) {
+        esp_now_send(MAC_BROADCAST, SYNC_PACKET, LEN_SYNC_PACKET);
 
-      ESP_LOGD(TAG, "broadcasting sync");
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, " ===== broadcasting sync =====");
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      }
     } else if (local_state.state == STATE_START_READ) {
       // if files are available in file_entries, start reading the next one
       file_list_entry_t entry;
@@ -263,7 +294,6 @@ void mtftp_task(void *pvParameter) {
       } else {
         ESP_LOGI(TAG, "no more files queued");
         endPeered();
-        vTaskDelay(100);
       }
     } else {
       vTaskDelay(100 / portTICK_PERIOD_MS);
