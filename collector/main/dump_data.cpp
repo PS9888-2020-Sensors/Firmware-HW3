@@ -1,11 +1,16 @@
+#include "driver/uart.h"
+#include "string.h"
+
 #include "dump_data.h"
 #include "board.h"
 
+static QueueHandle_t uart_queue;
 static const int UART_NUM = UART_NUM_2;
 static const int LEN_BUF_TX = 16384;
 static const int LEN_BUF_RX = 256;
+static const int QUEUE_LEN = 8;
 
-void dump_data_setup() {
+void dump_data_init() {
   uart_config_t uart_config;
   memset(&uart_config, 0, sizeof(uart_config_t));
 
@@ -23,8 +28,9 @@ void dump_data_setup() {
 
 void dump_data(uint8_t *mac, uint16_t file_index, uint32_t file_offset, const uint8_t *data, uint16_t btw) {
   uart_write_bytes(UART_NUM, "DATAPAKT", 8);
-  uart_write_bytes(UART_NUM, mac, 6);
-  uart_write_bytes(UART_NUM, &file_index, 2);
-  uart_write_bytes(UART_NUM, &file_offset, 4);
-  uart_write_bytes(UART_NUM, data, btw);
+  uart_write_bytes(UART_NUM, (const char *) mac, 6);
+  uart_write_bytes(UART_NUM, (const char *) &file_index, 2);
+  uart_write_bytes(UART_NUM, (const char *) &file_offset, 4);
+  uart_write_bytes(UART_NUM, (const char *) data, btw);
+  uart_write_bytes(UART_NUM, "ENDPAKT", 7);
 }

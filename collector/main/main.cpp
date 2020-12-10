@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "mtftp_task.h"
+#include "dump_data.h"
 
 #include "sdkconfig.h"
 
@@ -23,6 +24,8 @@ void app_main(void) {
   espnow_init();
 
   sd_init();
+
+  dump_data_init();
 
   xTaskCreate(mtftp_task, "mtftp_task", 2048, NULL, 4, NULL);
 }

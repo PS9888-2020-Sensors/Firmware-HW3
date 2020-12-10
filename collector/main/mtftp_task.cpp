@@ -99,7 +99,7 @@ static bool writeFile(uint16_t file_index, uint32_t file_offset, const uint8_t *
     return true;
   }
 
-  dump_data(local_state.peer_addr, file_index, file_offset, data, btw)
+  dump_data(local_state.peer_addr, file_index, file_offset, data, btw);
   return write_sd(local_state.peer_addr, file_index, file_offset, data, btw);
 }
 
