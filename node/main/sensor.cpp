@@ -140,7 +140,7 @@ TYPE_SENSOR_READING sensor_read(void) {
 
   ESP_LOGV(TAG, "bme280: temp=%f pressure=%f humidity=%f",comp_data.temperature, comp_data.pressure, comp_data.humidity);
 
-  return comp_data.pressure;
+  return comp_data.temperature;
 }
 
 void sensor_start_read(void) {
